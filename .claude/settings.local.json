@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm --version)",
+      "Bash(npm create:*)",
+      "Bash(npx create-vite@latest . --template react-ts --overwrite)",
+      "Bash(npm install:*)",
+      "Bash(npx shadcn@latest init --defaults -y)"
+    ]
+  }
+}
