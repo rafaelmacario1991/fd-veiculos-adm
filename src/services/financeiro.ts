@@ -1,6 +1,17 @@
 import { supabase } from './supabase'
 import type { PendenciaFinanceira } from '@/types'
 
+export async function atualizarConfirmacoesFinanceiro(
+  atividadeId: string,
+  confirmacoes: boolean[]
+): Promise<void> {
+  const { error } = await supabase
+    .from('sector_activities')
+    .update({ dados_json: { confirmacoes } })
+    .eq('id', atividadeId)
+  if (error) throw error
+}
+
 export async function listarPendenciasFinanceiras(saleId: string): Promise<PendenciaFinanceira[]> {
   const { data, error } = await supabase
     .from('pendencies')

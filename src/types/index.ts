@@ -17,6 +17,7 @@ export type FormaPagamento = string
 export interface MetodoPagamentoItem {
   tipo: string
   valor: number
+  data?: string
   banco?: string
   numero_parcelas?: number
   valor_parcela?: number

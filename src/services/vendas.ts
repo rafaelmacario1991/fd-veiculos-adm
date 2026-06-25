@@ -35,6 +35,7 @@ export interface VendaListagem {
   comprador_email: string | null
   // Negociação
   forma_pagamento: FormaPagamento
+  formas_pagamento_json: MetodoPagamentoItem[] | null
   banco_financeira: string | null
   valor_entrada: number | null
   valor_financiado: number | null
