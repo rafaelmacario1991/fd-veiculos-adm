@@ -198,8 +198,13 @@ export default function NovaVenda() {
       return
     }
     const totalPagamento = metodosSelecionados.reduce((acc, m) => acc + (Number(metodos[m.key].valor) || 0), 0)
-    if (Math.abs(totalPagamento - dados.valor_venda) > 0.01) {
-      setErroMetodos(`A soma dos pagamentos (${formatarMoeda(totalPagamento)}) não corresponde ao valor da venda (${formatarMoeda(dados.valor_venda)}).`)
+    const valorEntrada = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
+    const totalComEntrada = totalPagamento + valorEntrada
+    if (Math.abs(totalComEntrada - dados.valor_venda) > 0.01) {
+      const detalhe = valorEntrada > 0
+        ? `pagamentos (${formatarMoeda(totalPagamento)}) + entrada (${formatarMoeda(valorEntrada)}) = ${formatarMoeda(totalComEntrada)}`
+        : `soma dos pagamentos (${formatarMoeda(totalPagamento)})`
+      setErroMetodos(`${detalhe} não corresponde ao valor da venda (${formatarMoeda(dados.valor_venda)}).`)
       document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
@@ -528,17 +533,31 @@ export default function NovaVenda() {
           {/* Calculadora */}
           {(() => {
             const selecionados = METODOS_PAGAMENTO.filter(m => metodos[m.key].selecionado)
-            if (selecionados.length === 0) return null
+            const valorEntradaCalc = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
+            if (selecionados.length === 0 && valorEntradaCalc === 0) return null
             const totalPagamento = selecionados.reduce((acc, m) => acc + (Number(metodos[m.key].valor) || 0), 0)
+            const totalComEntrada = totalPagamento + valorEntradaCalc
             const valorVenda = Number(watch('valor_venda')) || 0
-            const confere = valorVenda > 0 && Math.abs(totalPagamento - valorVenda) <= 0.01
-            const diverge = valorVenda > 0 && totalPagamento > 0 && !confere
+            const confere = valorVenda > 0 && Math.abs(totalComEntrada - valorVenda) <= 0.01
+            const diverge = valorVenda > 0 && totalComEntrada > 0 && !confere
             return (
               <div className={`mt-4 rounded-lg px-4 py-3 border text-sm ${confere ? 'bg-green-50 border-green-200' : diverge ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-600">Total informado:</span>
+                {selecionados.map(m => (
+                  <div key={m.key} className="flex justify-between items-center text-gray-500 text-xs mb-1">
+                    <span>{m.label}:</span>
+                    <span>{formatarMoeda(Number(metodos[m.key].valor) || 0)}</span>
+                  </div>
+                ))}
+                {valorEntradaCalc > 0 && (
+                  <div className="flex justify-between items-center text-blue-600 text-xs mb-1">
+                    <span>Veículo de entrada:</span>
+                    <span>{formatarMoeda(valorEntradaCalc)}</span>
+                  </div>
+                )}
+                <div className={`flex justify-between items-center pt-1 border-t mt-1 ${confere ? 'border-green-200' : diverge ? 'border-red-200' : 'border-gray-200'}`}>
+                  <span className="text-gray-600 font-medium">Total:</span>
                   <span className={`font-semibold ${confere ? 'text-green-700' : diverge ? 'text-red-700' : 'text-gray-700'}`}>
-                    {formatarMoeda(totalPagamento)}
+                    {formatarMoeda(totalComEntrada)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center mt-1">
@@ -550,7 +569,7 @@ export default function NovaVenda() {
                 )}
                 {diverge && (
                   <p className="text-red-700 font-medium mt-2 text-xs">
-                    ✗ Diferença de {formatarMoeda(Math.abs(totalPagamento - valorVenda))}
+                    ✗ Diferença de {formatarMoeda(Math.abs(totalComEntrada - valorVenda))}
                   </p>
                 )}
               </div>
