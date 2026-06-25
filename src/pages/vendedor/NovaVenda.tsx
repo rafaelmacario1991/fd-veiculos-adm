@@ -29,7 +29,7 @@ import {
   type DadosEntradaVeiculo,
   type DocumentoEntrada,
 } from '@/services/entradaVeiculo'
-import { Camera, Car, AlertCircle, Plus, X } from 'lucide-react'
+import { Camera, Car, AlertCircle, Plus, X, Loader2 } from 'lucide-react'
 
 // ---------------------------------------------------------------
 // Schema de validação
@@ -361,6 +361,30 @@ export default function NovaVenda() {
   // Fotos
   const [fotos, setFotos] = useState<AnexoVenda[]>([])
 
+  // CEP
+  const [buscandoCep, setBuscandoCep] = useState(false)
+  const [erroCep, setErroCep]         = useState<string | null>(null)
+
+  async function buscarCep(valor: string) {
+    const cep = valor.replace(/\D/g, '')
+    if (cep.length !== 8) { setErroCep(null); return }
+    setBuscandoCep(true)
+    setErroCep(null)
+    try {
+      const res  = await fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      const data = await res.json()
+      if (data.erro) { setErroCep('CEP não encontrado.'); return }
+      setValue('comprador_logradouro', data.logradouro ?? '', { shouldValidate: true })
+      setValue('comprador_bairro',     data.bairro     ?? '', { shouldValidate: true })
+      setValue('comprador_cidade',     data.localidade ?? '', { shouldValidate: true })
+      setValue('comprador_uf',         data.uf         ?? '', { shouldValidate: true })
+    } catch {
+      setErroCep('Não foi possível consultar o CEP.')
+    } finally {
+      setBuscandoCep(false)
+    }
+  }
+
   // Veículo de entrada
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
   const [dadosEntrada, setDadosEntrada] = useState<Partial<DadosEntradaVeiculo>>({})
@@ -563,8 +587,21 @@ export default function NovaVenda() {
           <Campo label="E-mail" erro={errors.comprador_email?.message} colSpan="full">
             <Input {...register('comprador_email')} type="email" placeholder="email@exemplo.com" />
           </Campo>
-          <Campo label="CEP *" erro={errors.comprador_cep?.message}>
-            <Input {...register('comprador_cep')} placeholder="00000-000" />
+          <Campo label="CEP *" erro={errors.comprador_cep?.message ?? erroCep ?? undefined}>
+            <div className="relative">
+              <Input
+                {...register('comprador_cep')}
+                placeholder="00000-000"
+                maxLength={9}
+                onChange={(e) => {
+                  register('comprador_cep').onChange(e)
+                  buscarCep(e.target.value)
+                }}
+              />
+              {buscandoCep && (
+                <Loader2 size={13} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 animate-spin" />
+              )}
+            </div>
           </Campo>
           <Campo label="Logradouro *" erro={errors.comprador_logradouro?.message}>
             <Input {...register('comprador_logradouro')} placeholder="Rua / Av." />
