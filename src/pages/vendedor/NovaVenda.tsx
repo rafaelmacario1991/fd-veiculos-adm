@@ -292,7 +292,7 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
           <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
           <Select
             value={linha.parcelasCartao}
-            onValueChange={(v) => onChange({ parcelasCartao: v })}
+            onValueChange={(v) => onChange({ parcelasCartao: v ?? '' })}
           >
             <SelectTrigger className="h-9 text-sm w-40">
               <SelectValue placeholder="Selecione" />
@@ -313,7 +313,7 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
             <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas (máx. 10x)</label>
             <Select
               value={linha.parcelasPromissoria}
-              onValueChange={(v) => onChange({ parcelasPromissoria: v })}
+              onValueChange={(v) => onChange({ parcelasPromissoria: v ?? '' })}
             >
               <SelectTrigger className="h-9 text-sm">
                 <SelectValue placeholder="Selecione" />
