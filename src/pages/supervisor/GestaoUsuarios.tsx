@@ -3,7 +3,11 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRequererPerfil } from '@/hooks/useAuth'
-import { listarUsuarios, criarUsuario, atualizarPerfis, alternarAtivo, type UsuarioComPerfis } from '@/services/usuarios'
+import {
+  listarUsuarios, criarUsuario, atualizarPerfis, alternarAtivo,
+  alterarDadosUsuario, alterarSenhaUsuario, excluirUsuario,
+  type UsuarioComPerfis,
+} from '@/services/usuarios'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,20 +28,20 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table'
-import { UserPlus, Pencil } from 'lucide-react'
+import { AlertTriangle, Pencil, Trash2, UserPlus } from 'lucide-react'
 import type { Perfil } from '@/types'
 
 const PERFIS: { valor: Perfil; label: string }[] = [
-  { valor: 'vendedor', label: 'Vendedor' },
-  { valor: 'contratos', label: 'Contratos' },
-  { valor: 'financeiro', label: 'Financeiro' },
-  { valor: 'fiscal', label: 'Fiscal' },
+  { valor: 'vendedor',      label: 'Vendedor' },
+  { valor: 'contratos',     label: 'Contratos' },
+  { valor: 'financeiro',    label: 'Financeiro' },
+  { valor: 'fiscal',        label: 'Fiscal' },
   { valor: 'transferencia', label: 'Transferência' },
-  { valor: 'supervisor', label: 'Supervisor' },
+  { valor: 'supervisor',    label: 'Supervisor' },
 ]
 
 const schemaNovoUsuario = z.object({
-  nome: z.string().min(2, 'Nome obrigatório'),
+  nome:  z.string().min(2, 'Nome obrigatório'),
   email: z.string().email('E-mail inválido'),
   senha: z.string().min(6, 'Mínimo 6 caracteres'),
 })
@@ -47,13 +51,18 @@ type FormNovoUsuario = z.infer<typeof schemaNovoUsuario>
 export default function GestaoUsuarios() {
   useRequererPerfil(['supervisor'])
 
-  const [usuarios, setUsuarios] = useState<UsuarioComPerfis[]>([])
-  const [carregando, setCarregando] = useState(true)
-  const [dialogAberto, setDialogAberto] = useState(false)
-  const [usuarioEditando, setUsuarioEditando] = useState<UsuarioComPerfis | null>(null)
+  const [usuarios, setUsuarios]                     = useState<UsuarioComPerfis[]>([])
+  const [carregando, setCarregando]                 = useState(true)
+  const [dialogAberto, setDialogAberto]             = useState(false)
+  const [usuarioEditando, setUsuarioEditando]       = useState<UsuarioComPerfis | null>(null)
   const [perfisSelecionados, setPerfisSelecionados] = useState<Perfil[]>([])
-  const [enviando, setEnviando] = useState(false)
-  const [erro, setErro] = useState<string | null>(null)
+  const [enviando, setEnviando]                     = useState(false)
+  const [erro, setErro]                             = useState<string | null>(null)
+
+  // Campos do modo edição
+  const [nomeEditando, setNomeEditando]           = useState('')
+  const [novaSenha, setNovaSenha]                 = useState('')
+  const [confirmandoExclusao, setConfirmandoExclusao] = useState(false)
 
   const { register, handleSubmit, reset, formState: { errors } } = useForm<FormNovoUsuario>({
     resolver: zodResolver(schemaNovoUsuario),
@@ -62,8 +71,7 @@ export default function GestaoUsuarios() {
   async function carregar() {
     setCarregando(true)
     try {
-      const dados = await listarUsuarios()
-      setUsuarios(dados)
+      setUsuarios(await listarUsuarios())
     } finally {
       setCarregando(false)
     }
@@ -79,9 +87,12 @@ export default function GestaoUsuarios() {
     setDialogAberto(true)
   }
 
-  function abrirEdicaoPerfis(usuario: UsuarioComPerfis) {
+  function abrirEdicao(usuario: UsuarioComPerfis) {
     setUsuarioEditando(usuario)
+    setNomeEditando(usuario.nome)
     setPerfisSelecionados(usuario.user_roles.map((r) => r.perfil))
+    setNovaSenha('')
+    setConfirmandoExclusao(false)
     setErro(null)
     setDialogAberto(true)
   }
@@ -93,10 +104,7 @@ export default function GestaoUsuarios() {
   }
 
   async function salvarNovoUsuario(dados: FormNovoUsuario) {
-    if (perfisSelecionados.length === 0) {
-      setErro('Selecione ao menos um perfil.')
-      return
-    }
+    if (perfisSelecionados.length === 0) { setErro('Selecione ao menos um perfil.'); return }
     setEnviando(true)
     setErro(null)
     try {
@@ -110,20 +118,41 @@ export default function GestaoUsuarios() {
     }
   }
 
-  async function salvarPerfis() {
+  async function salvarEdicao() {
     if (!usuarioEditando) return
-    if (perfisSelecionados.length === 0) {
-      setErro('Selecione ao menos um perfil.')
-      return
-    }
+    if (!nomeEditando.trim())          { setErro('Nome é obrigatório.'); return }
+    if (perfisSelecionados.length === 0) { setErro('Selecione ao menos um perfil.'); return }
+    if (novaSenha && novaSenha.length < 6) { setErro('Nova senha deve ter ao menos 6 caracteres.'); return }
+
     setEnviando(true)
     setErro(null)
     try {
-      await atualizarPerfis(usuarioEditando.id, perfisSelecionados)
+      const tarefas: Promise<void>[] = [
+        alterarDadosUsuario(usuarioEditando.id, nomeEditando.trim()),
+        atualizarPerfis(usuarioEditando.id, perfisSelecionados),
+      ]
+      if (novaSenha) tarefas.push(alterarSenhaUsuario(usuarioEditando.id, novaSenha))
+      await Promise.all(tarefas)
       setDialogAberto(false)
       await carregar()
     } catch {
-      setErro('Erro ao atualizar perfis.')
+      setErro('Erro ao salvar alterações.')
+    } finally {
+      setEnviando(false)
+    }
+  }
+
+  async function confirmarExclusao() {
+    if (!usuarioEditando) return
+    setEnviando(true)
+    setErro(null)
+    try {
+      await excluirUsuario(usuarioEditando.id)
+      setDialogAberto(false)
+      await carregar()
+    } catch {
+      setErro('Não foi possível excluir. O usuário pode ter dados vinculados — considere desativá-lo.')
+      setConfirmandoExclusao(false)
     } finally {
       setEnviando(false)
     }
@@ -133,21 +162,20 @@ export default function GestaoUsuarios() {
     try {
       await alternarAtivo(usuario.id, !usuario.ativo)
       await carregar()
-    } catch {
-      // silent
-    }
+    } catch { /* silent */ }
   }
-
-  const acoes = (
-    <Button size="sm" onClick={abrirNovoUsuario}>
-      <UserPlus size={14} className="mr-1.5" />
-      Novo Usuário
-    </Button>
-  )
 
   return (
     <div className="flex flex-col flex-1">
-      <Header titulo="Gestão de Usuários" acoes={acoes} />
+      <Header
+        titulo="Gestão de Usuários"
+        acoes={
+          <Button size="sm" onClick={abrirNovoUsuario}>
+            <UserPlus size={14} className="mr-1.5" />
+            Novo Usuário
+          </Button>
+        }
+      />
 
       <div className="flex-1 p-4 md:p-6">
         {carregando ? (
@@ -185,21 +213,14 @@ export default function GestaoUsuarios() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 px-2 text-xs"
-                          onClick={() => abrirEdicaoPerfis(u)}
-                        >
+                        <Button size="sm" variant="ghost" className="h-7 px-2 text-xs"
+                          onClick={() => abrirEdicao(u)}>
                           <Pencil size={12} className="mr-1" />
-                          Perfis
+                          Editar
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="ghost"
+                        <Button size="sm" variant="ghost"
                           className={`h-7 px-2 text-xs ${u.ativo ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}`}
-                          onClick={() => toggleAtivo(u)}
-                        >
+                          onClick={() => toggleAtivo(u)}>
                           {u.ativo ? 'Desativar' : 'Ativar'}
                         </Button>
                       </div>
@@ -212,16 +233,18 @@ export default function GestaoUsuarios() {
         )}
       </div>
 
-      {/* Dialog — Novo usuário ou Editar perfis */}
-      <Dialog open={dialogAberto} onOpenChange={setDialogAberto}>
+      {/* ── Dialog ── */}
+      <Dialog open={dialogAberto} onOpenChange={(v) => { setDialogAberto(v); if (!v) setConfirmandoExclusao(false) }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
             <DialogTitle>
-              {usuarioEditando ? `Perfis — ${usuarioEditando.nome}` : 'Novo Usuário'}
+              {usuarioEditando ? `Editar — ${usuarioEditando.nome}` : 'Novo Usuário'}
             </DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4 pt-2">
+
+            {/* ── Criar usuário ── */}
             {!usuarioEditando && (
               <>
                 <div>
@@ -242,6 +265,20 @@ export default function GestaoUsuarios() {
               </>
             )}
 
+            {/* ── Editar: nome ── */}
+            {usuarioEditando && (
+              <div>
+                <Label className="text-xs font-medium">Nome *</Label>
+                <Input
+                  className="mt-1"
+                  value={nomeEditando}
+                  onChange={(e) => setNomeEditando(e.target.value)}
+                  placeholder="Nome completo"
+                />
+              </div>
+            )}
+
+            {/* Perfis */}
             <div>
               <Label className="text-xs font-medium block mb-2">Perfis *</Label>
               <div className="grid grid-cols-2 gap-2">
@@ -257,16 +294,36 @@ export default function GestaoUsuarios() {
               </div>
             </div>
 
+            {/* ── Editar: nova senha (opcional) ── */}
+            {usuarioEditando && (
+              <div>
+                <Label className="text-xs font-medium">Nova senha</Label>
+                <Input
+                  type="password"
+                  className="mt-1"
+                  placeholder="Deixe em branco para manter a atual"
+                  value={novaSenha}
+                  onChange={(e) => setNovaSenha(e.target.value)}
+                  autoComplete="new-password"
+                />
+                {novaSenha && novaSenha.length < 6 && (
+                  <p className="text-xs text-amber-600 mt-1">Mínimo 6 caracteres</p>
+                )}
+              </div>
+            )}
+
+            {/* Erro */}
             {erro && (
               <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">
                 {erro}
               </p>
             )}
 
+            {/* Botões principais */}
             <div className="flex gap-2 pt-1">
               {usuarioEditando ? (
-                <Button onClick={salvarPerfis} disabled={enviando} className="flex-1">
-                  {enviando ? 'Salvando...' : 'Salvar Perfis'}
+                <Button onClick={salvarEdicao} disabled={enviando} className="flex-1">
+                  {enviando ? 'Salvando...' : 'Salvar Alterações'}
                 </Button>
               ) : (
                 <Button onClick={handleSubmit(salvarNovoUsuario)} disabled={enviando} className="flex-1">
@@ -277,6 +334,42 @@ export default function GestaoUsuarios() {
                 Cancelar
               </Button>
             </div>
+
+            {/* ── Zona destrutiva: excluir ── */}
+            {usuarioEditando && (
+              <div className="pt-2 border-t border-gray-100">
+                {!confirmandoExclusao ? (
+                  <button
+                    onClick={() => setConfirmandoExclusao(true)}
+                    className="flex items-center gap-1.5 text-xs text-red-500 hover:text-red-700 transition-colors"
+                  >
+                    <Trash2 size={13} />
+                    Excluir usuário
+                  </button>
+                ) : (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3 space-y-2">
+                    <div className="flex items-center gap-2 text-red-700">
+                      <AlertTriangle size={14} />
+                      <span className="text-sm font-medium">Confirmar exclusão?</span>
+                    </div>
+                    <p className="text-xs text-red-600">
+                      <strong>{usuarioEditando.nome}</strong> será removido permanentemente.
+                      Se o usuário tiver vendas ou dados vinculados, prefira <strong>Desativar</strong>.
+                    </p>
+                    <div className="flex gap-2">
+                      <Button size="sm" variant="destructive" className="h-7 text-xs"
+                        onClick={confirmarExclusao} disabled={enviando}>
+                        {enviando ? 'Excluindo...' : 'Confirmar exclusão'}
+                      </Button>
+                      <Button size="sm" variant="ghost" className="h-7 text-xs"
+                        onClick={() => setConfirmandoExclusao(false)}>
+                        Cancelar
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </DialogContent>
       </Dialog>

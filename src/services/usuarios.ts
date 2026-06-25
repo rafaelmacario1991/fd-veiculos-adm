@@ -49,3 +49,26 @@ export async function alternarAtivo(userId: string, ativo: boolean): Promise<voi
 
   if (error) throw error
 }
+
+export async function alterarDadosUsuario(userId: string, nome: string): Promise<void> {
+  const { error } = await supabase.rpc('alterar_dados_usuario', {
+    p_user_id: userId,
+    p_nome: nome,
+  })
+  if (error) throw error
+}
+
+export async function alterarSenhaUsuario(userId: string, novaSenha: string): Promise<void> {
+  const { error } = await supabase.rpc('alterar_senha_usuario', {
+    p_user_id: userId,
+    p_nova_senha: novaSenha,
+  })
+  if (error) throw error
+}
+
+export async function excluirUsuario(userId: string): Promise<void> {
+  const { error } = await supabase.rpc('excluir_usuario', {
+    p_user_id: userId,
+  })
+  if (error) throw error
+}
