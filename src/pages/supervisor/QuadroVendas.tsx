@@ -9,7 +9,7 @@ import {
 import Header from '@/components/layout/Header'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  PieChart, Pie, Cell, Legend,
+  PieChart, Pie, Cell,
 } from 'recharts'
 import { TrendingUp, ShoppingBag, DollarSign, BarChart2, Users } from 'lucide-react'
 
@@ -146,7 +146,7 @@ export default function QuadroVendas() {
                       <XAxis dataKey="diaLabel" tick={{ fontSize: 11 }} />
                       <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                       <Tooltip
-                        formatter={(value: number) => [value, 'Vendas']}
+                        formatter={(value) => [value, 'Vendas']}
                         labelStyle={{ fontSize: 12 }}
                         contentStyle={{ fontSize: 12 }}
                       />
@@ -174,14 +174,14 @@ export default function QuadroVendas() {
                         cx="50%"
                         cy="50%"
                         outerRadius={70}
-                        label={({ forma, percent }) => `${forma} ${(percent * 100).toFixed(0)}%`}
+                        label={({ forma, percent }: any) => `${forma} ${((percent ?? 0) * 100).toFixed(0)}%`}
                         labelLine={false}
                       >
                         {dados.porFormaPagamento.map((_, i) => (
                           <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />
                         ))}
                       </Pie>
-                      <Tooltip formatter={(v: number, name: string) => [v, name]} contentStyle={{ fontSize: 12 }} />
+                      <Tooltip formatter={(v, name) => [v, name]} contentStyle={{ fontSize: 12 }} />
                     </PieChart>
                   </ResponsiveContainer>
                 )}
@@ -210,7 +210,7 @@ export default function QuadroVendas() {
                     <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
                     <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
                     <Tooltip
-                      formatter={(value: number, name: string) =>
+                      formatter={(value: any, name: any) =>
                         name === 'qtd' ? [value, 'Vendas'] : [formatarMoeda(value), 'Faturamento']
                       }
                       labelStyle={{ fontSize: 12 }}

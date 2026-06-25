@@ -6,6 +6,8 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/store/authStore'
 import { useRequererPerfil } from '@/hooks/useAuth'
 import { criarVenda } from '@/services/vendas'
+import { salvarFotosNoBanco } from '@/services/anexos'
+import { salvarDocumentosNoBanco } from '@/services/entradaVeiculo'
 import { useVendasStore } from '@/store/vendasStore'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
@@ -52,8 +54,6 @@ const schema = z.object({
   ano_modelo: numInt('Ano inválido').pipe(z.number().int().min(1950).max(2030, 'Ano inválido')),
   cor: z.string().min(1, 'Obrigatório'),
   placa: z.string().min(7, 'Placa inválida').max(8),
-  renavam: z.string().min(9, 'RENAVAM inválido'),
-  chassi: z.string().length(17, 'Chassi deve ter 17 caracteres'),
   quilometragem: numInt('Quilometragem inválida').pipe(z.number().int().min(0)),
   valor_venda: z.preprocess(
     (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
@@ -73,17 +73,6 @@ const schema = z.object({
   comprador_cep: z.string().min(8, 'CEP inválido'),
   comprador_telefone: z.string().min(10, 'Telefone inválido'),
   comprador_email: z.string().email('E-mail inválido').optional().or(z.literal('')),
-  // Negociação
-  forma_pagamento: z.enum(['a_vista', 'cartao', 'financiamento'], {
-    message: 'Selecione a forma de pagamento',
-  }),
-  banco_financeira: z.string().optional(),
-  valor_entrada: numOpcional,
-  valor_financiado: numOpcional,
-  numero_parcelas: z.preprocess(
-    (v) => (v === '' || v === undefined ? undefined : Number(v)),
-    z.number().int().positive().optional()
-  ),
   observacoes: z.string().optional(),
 })
 
@@ -96,6 +85,35 @@ const UFS = [
 ]
 
 const MIN_FOTOS = 5
+
+const METODOS_PAGAMENTO = [
+  { key: 'dinheiro',      label: 'Dinheiro' },
+  { key: 'pix',           label: 'PIX' },
+  { key: 'cartao',        label: 'Cartão' },
+  { key: 'financiamento', label: 'Financiamento' },
+  { key: 'promissoria',   label: 'Promissória' },
+] as const
+
+type ChaveMetodo = typeof METODOS_PAGAMENTO[number]['key']
+
+interface EstadoMetodo {
+  selecionado: boolean
+  valor: string
+  banco: string
+  parcelas: string
+  valorParcela: string
+  parcelasPromissoria: string
+  dataPrimeiroPagamento: string
+}
+
+const estadoMetodoInicial: EstadoMetodo = {
+  selecionado: false, valor: '', banco: '', parcelas: '', valorParcela: '',
+  parcelasPromissoria: '', dataPrimeiroPagamento: '',
+}
+
+function formatarMoeda(v: number) {
+  return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
 
 // ---------------------------------------------------------------
 // Componentes auxiliares
@@ -143,6 +161,16 @@ export default function NovaVenda() {
   // ID pré-gerado para uploads antes de criar a venda
   const [saleId] = useState(() => crypto.randomUUID())
 
+  // Formas de pagamento
+  const [metodos, setMetodos] = useState<Record<ChaveMetodo, EstadoMetodo>>({
+    dinheiro:      { ...estadoMetodoInicial },
+    pix:           { ...estadoMetodoInicial },
+    cartao:        { ...estadoMetodoInicial },
+    financiamento: { ...estadoMetodoInicial },
+    promissoria:   { ...estadoMetodoInicial },
+  })
+  const [erroMetodos, setErroMetodos] = useState<string | null>(null)
+
   // Fotos do veículo vendido
   const [fotos, setFotos] = useState<AnexoVenda[]>([])
 
@@ -159,18 +187,47 @@ export default function NovaVenda() {
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) as Resolver<FormData> })
 
-  const formaPagamento = watch('forma_pagamento')
-
   async function enviar(dados: FormData) {
     if (!usuario?.id) return
 
+    // Validar formas de pagamento
+    const metodosSelecionados = METODOS_PAGAMENTO.filter(m => metodos[m.key].selecionado)
+    if (metodosSelecionados.length === 0) {
+      setErroMetodos('Selecione pelo menos uma forma de pagamento.')
+      document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    const totalPagamento = metodosSelecionados.reduce((acc, m) => acc + (Number(metodos[m.key].valor) || 0), 0)
+    if (Math.abs(totalPagamento - dados.valor_venda) > 0.01) {
+      setErroMetodos(`A soma dos pagamentos (${formatarMoeda(totalPagamento)}) não corresponde ao valor da venda (${formatarMoeda(dados.valor_venda)}).`)
+      document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    setErroMetodos(null)
+
     if (fotos.length < MIN_FOTOS) {
       setErroGlobal(`Adicione pelo menos ${MIN_FOTOS} fotos do veículo antes de registrar.`)
-      window.scrollTo({ top: 0, behavior: 'smooth' })
-      // scroll até a seção de fotos
       document.getElementById('secao-fotos')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
     }
+
+    const formasPagamentoJson = metodosSelecionados.map(m => ({
+      tipo: m.key,
+      valor: Number(metodos[m.key].valor),
+      ...(m.key === 'cartao' ? {
+        numero_parcelas: metodos.cartao.parcelas ? Number(metodos.cartao.parcelas) : undefined,
+      } : {}),
+      ...(m.key === 'financiamento' ? {
+        banco: metodos.financiamento.banco || undefined,
+        numero_parcelas: metodos.financiamento.parcelas ? Number(metodos.financiamento.parcelas) : undefined,
+        valor_parcela: metodos.financiamento.valorParcela ? Number(metodos.financiamento.valorParcela) : undefined,
+      } : {}),
+      ...(m.key === 'promissoria' ? {
+        numero_parcelas: metodos.promissoria.parcelasPromissoria ? Number(metodos.promissoria.parcelasPromissoria) : undefined,
+        data_primeiro_pagamento: metodos.promissoria.dataPrimeiroPagamento || undefined,
+      } : {}),
+    }))
+    const formaPagamentoResumo = metodosSelecionados.map(m => m.label).join(' + ')
 
     setEnviando(true)
     setErroGlobal(null)
@@ -184,12 +241,17 @@ export default function NovaVenda() {
           comprador_nascimento: dados.comprador_nascimento || undefined,
           comprador_complemento: dados.comprador_complemento || undefined,
           comprador_email: dados.comprador_email || undefined,
-          banco_financeira: dados.banco_financeira || undefined,
+          forma_pagamento: formaPagamentoResumo,
+          formas_pagamento_json: formasPagamentoJson,
           observacoes: dados.observacoes || undefined,
         },
         usuario.id,
         saleId
       )
+
+      // Agora que a venda existe no banco, persistir os anexos
+      await salvarFotosNoBanco(fotos)
+      if (documentosEntrada.length) await salvarDocumentosNoBanco(documentosEntrada)
 
       // Salvar veículo de entrada se informado
       if (temEntrada && dadosEntrada.marca && dadosEntrada.modelo && dadosEntrada.placa) {
@@ -243,14 +305,6 @@ export default function NovaVenda() {
 
           <Campo label="Quilometragem *" erro={errors.quilometragem?.message}>
             <Input {...register('quilometragem')} type="number" placeholder="45000" />
-          </Campo>
-
-          <Campo label="RENAVAM *" erro={errors.renavam?.message}>
-            <Input {...register('renavam')} placeholder="00000000000" />
-          </Campo>
-
-          <Campo label="Chassi *" erro={errors.chassi?.message}>
-            <Input {...register('chassi')} placeholder="17 caracteres" className="uppercase" />
           </Campo>
 
           <Campo label="Valor de Venda (R$) *" erro={errors.valor_venda?.message}>
@@ -347,44 +401,169 @@ export default function NovaVenda() {
         </Secao>
 
         {/* Dados da Negociação */}
-        <Secao titulo="Dados da Negociação">
-          <Campo label="Forma de Pagamento *" erro={errors.forma_pagamento?.message}>
-            <Select
-              onValueChange={(v) => {
-                if (v) setValue('forma_pagamento', v as FormData['forma_pagamento'], { shouldValidate: true })
-              }}
-            >
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="a_vista">À Vista</SelectItem>
-                <SelectItem value="cartao">Cartão</SelectItem>
-                <SelectItem value="financiamento">Financiamento</SelectItem>
-              </SelectContent>
-            </Select>
-          </Campo>
+        <div id="secao-pagamento" className="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 pb-3 border-b border-gray-100">
+            Dados da Negociação
+          </h2>
 
-          {formaPagamento === 'financiamento' && (
-            <>
-              <Campo label="Banco / Financeira" erro={errors.banco_financeira?.message}>
-                <Input {...register('banco_financeira')} placeholder="Ex: Banco do Brasil" />
-              </Campo>
+          <div className="space-y-3">
+            {METODOS_PAGAMENTO.map((m) => {
+              const estado = metodos[m.key]
+              return (
+                <div key={m.key} className={`rounded-lg border transition-colors ${estado.selecionado ? 'border-blue-200 bg-blue-50/40 dark:border-blue-800 dark:bg-blue-900/20' : 'border-gray-100 bg-gray-50/50 dark:border-gray-700 dark:bg-gray-800'}`}>
+                  {/* Linha do checkbox */}
+                  <label className="flex items-center gap-3 px-4 py-3 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={estado.selecionado}
+                      onChange={(e) => setMetodos(prev => ({
+                        ...prev,
+                        [m.key]: { ...prev[m.key], selecionado: e.target.checked, valor: e.target.checked ? prev[m.key].valor : '' }
+                      }))}
+                      className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    />
+                    <span className="text-sm font-medium text-gray-700">{m.label}</span>
+                  </label>
 
-              <Campo label="Valor de Entrada (R$)" erro={errors.valor_entrada?.message}>
-                <Input {...register('valor_entrada')} type="number" step="0.01" placeholder="10000.00" />
-              </Campo>
+                  {/* Campos expandidos quando selecionado */}
+                  {estado.selecionado && (
+                    <div className="px-4 pb-4 space-y-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-600 mb-1">Valor (R$) *</label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          placeholder="0,00"
+                          value={estado.valor}
+                          onChange={(e) => setMetodos(prev => ({ ...prev, [m.key]: { ...prev[m.key], valor: e.target.value } }))}
+                        />
+                      </div>
 
-              <Campo label="Valor Financiado (R$)" erro={errors.valor_financiado?.message}>
-                <Input {...register('valor_financiado')} type="number" step="0.01" placeholder="35000.00" />
-              </Campo>
+                      {m.key === 'financiamento' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div className="sm:col-span-2">
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Banco / Financeira</label>
+                            <Input
+                              placeholder="Ex: Banco do Brasil"
+                              value={estado.banco}
+                              onChange={(e) => setMetodos(prev => ({ ...prev, financiamento: { ...prev.financiamento, banco: e.target.value } }))}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
+                            <Input
+                              type="number"
+                              placeholder="36"
+                              value={estado.parcelas}
+                              onChange={(e) => setMetodos(prev => ({ ...prev, financiamento: { ...prev.financiamento, parcelas: e.target.value } }))}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Valor da Parcela (R$)</label>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              placeholder="1.500,00"
+                              value={estado.valorParcela}
+                              onChange={(e) => setMetodos(prev => ({ ...prev, financiamento: { ...prev.financiamento, valorParcela: e.target.value } }))}
+                            />
+                          </div>
+                        </div>
+                      )}
 
-              <Campo label="Nº de Parcelas" erro={errors.numero_parcelas?.message}>
-                <Input {...register('numero_parcelas')} type="number" placeholder="36" />
-              </Campo>
-            </>
+                      {m.key === 'cartao' && (
+                        <div className="pt-1">
+                          <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
+                          <Select
+                            value={estado.parcelas}
+                            onValueChange={(v) => setMetodos(prev => ({ ...prev, cartao: { ...prev.cartao, parcelas: v } }))}
+                          >
+                            <SelectTrigger>
+                              <SelectValue placeholder="Selecione" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {Array.from({ length: 21 }, (_, i) => i + 1).map(n => (
+                                <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      )}
+
+                      {m.key === 'promissoria' && (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas (máx. 10x)</label>
+                            <Select
+                              value={estado.parcelasPromissoria}
+                              onValueChange={(v) => setMetodos(prev => ({ ...prev, promissoria: { ...prev.promissoria, parcelasPromissoria: v } }))}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Selecione" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {Array.from({ length: 10 }, (_, i) => i + 1).map(n => (
+                                  <SelectItem key={n} value={String(n)}>{n}x</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">Data do 1º Pagamento</label>
+                            <Input
+                              type="date"
+                              value={estado.dataPrimeiroPagamento}
+                              onChange={(e) => setMetodos(prev => ({ ...prev, promissoria: { ...prev.promissoria, dataPrimeiroPagamento: e.target.value } }))}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+
+          {/* Calculadora */}
+          {(() => {
+            const selecionados = METODOS_PAGAMENTO.filter(m => metodos[m.key].selecionado)
+            if (selecionados.length === 0) return null
+            const totalPagamento = selecionados.reduce((acc, m) => acc + (Number(metodos[m.key].valor) || 0), 0)
+            const valorVenda = Number(watch('valor_venda')) || 0
+            const confere = valorVenda > 0 && Math.abs(totalPagamento - valorVenda) <= 0.01
+            const diverge = valorVenda > 0 && totalPagamento > 0 && !confere
+            return (
+              <div className={`mt-4 rounded-lg px-4 py-3 border text-sm ${confere ? 'bg-green-50 border-green-200' : diverge ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'}`}>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-600">Total informado:</span>
+                  <span className={`font-semibold ${confere ? 'text-green-700' : diverge ? 'text-red-700' : 'text-gray-700'}`}>
+                    {formatarMoeda(totalPagamento)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center mt-1">
+                  <span className="text-gray-600">Valor da venda:</span>
+                  <span className="font-semibold text-gray-700">{formatarMoeda(valorVenda)}</span>
+                </div>
+                {confere && (
+                  <p className="text-green-700 font-medium mt-2 text-xs">✓ Valores conferem</p>
+                )}
+                {diverge && (
+                  <p className="text-red-700 font-medium mt-2 text-xs">
+                    ✗ Diferença de {formatarMoeda(Math.abs(totalPagamento - valorVenda))}
+                  </p>
+                )}
+              </div>
+            )
+          })()}
+
+          {erroMetodos && (
+            <div className="mt-3 flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">
+              <AlertCircle size={14} />
+              {erroMetodos}
+            </div>
           )}
-        </Secao>
+        </div>
 
         {/* Veículo de Entrada */}
         <div className="bg-white border border-gray-200 rounded-xl p-5">
@@ -454,16 +633,6 @@ export default function NovaVenda() {
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Quilometragem</Label>
                   <Input type="number" placeholder="85000" value={dadosEntrada.quilometragem ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, quilometragem: Number(e.target.value) }))} />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">RENAVAM</Label>
-                  <Input placeholder="00000000000" value={dadosEntrada.renavam ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, renavam: e.target.value }))} />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Chassi</Label>
-                  <Input placeholder="17 caracteres" className="uppercase" value={dadosEntrada.chassi ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, chassi: e.target.value.toUpperCase() }))} />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Valor Estimado (R$)</Label>

@@ -7,13 +7,18 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
 import FiltrosPainel, { STATUS_ATIVIDADE, type FiltrosPainelState } from '@/components/ui/FiltrosPainel'
-import { FileText, CheckCircle2, Eye, History } from 'lucide-react'
+import { FileText, CheckCircle2, Eye, History, Trash2 } from 'lucide-react'
 import type { VendaListagem } from '@/services/vendas'
+import SecaoTarefasSetor from '@/components/tarefas/SecaoTarefasSetor'
+import { useAuthStore } from '@/store/authStore'
+import { excluirAtividadeSetor } from '@/services/supervisor'
 
 export default function PainelContratos() {
   useRequererPerfil(['contratos', 'supervisor'])
 
   const navigate = useNavigate()
+  const { usuario } = useAuthStore()
+  const isSupervisor = usuario?.perfis.includes('supervisor') ?? false
   const [atividades, setAtividades] = useState<AtividadeComVenda[]>([])
   const [carregando, setCarregando] = useState(true)
   const [processando, setProcessando] = useState<string | null>(null)
@@ -46,6 +51,13 @@ export default function PainelContratos() {
     }
   }
 
+  async function handleExcluir(id: string) {
+    try {
+      await excluirAtividadeSetor(id)
+      await carregar()
+    } catch { /* silent */ }
+  }
+
   return (
     <div className="flex flex-col flex-1">
       <Header
@@ -76,6 +88,7 @@ export default function PainelContratos() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     >
                       <Button size="sm" onClick={() => formalizarContrato(a)} disabled={processando === a.id}>
                         <FileText size={13} className="mr-1.5" />
@@ -98,6 +111,7 @@ export default function PainelContratos() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     />
                   ))}
                 </div>
@@ -105,13 +119,16 @@ export default function PainelContratos() {
             )}
 
             {atividades.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="flex flex-col items-center justify-center h-48 text-center">
                 <CheckCircle2 size={40} className="text-green-300 mb-3" />
                 <p className="text-gray-500 font-medium">Nenhum processo registrado</p>
               </div>
             )}
           </>
         )}
+
+        {/* Atividades do setor */}
+        <SecaoTarefasSetor setor="contratos" />
       </div>
 
       <ModalResumoVenda venda={vendaSelecionada} onFechar={() => setVendaSelecionada(null)} />
@@ -119,6 +136,7 @@ export default function PainelContratos() {
   )
 }
 
+// ============================================================
 // Componente compartilhado entre painéis — renderiza os dados da venda
 export function CartaoSetor({
   atividade,
@@ -126,12 +144,14 @@ export function CartaoSetor({
   extra,
   onVerResumo,
   onVerHistorico,
+  onExcluir,
 }: {
   atividade: AtividadeComVenda
   children?: React.ReactNode
   extra?: React.ReactNode
   onVerResumo?: () => void
   onVerHistorico?: () => void
+  onExcluir?: () => void
 }) {
   const v = atividade.sales
   const concluida = atividade.status === 'concluida'
@@ -157,16 +177,27 @@ export function CartaoSetor({
           </p>
         </div>
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
-          {concluida ? (
-            <Badge className="text-xs bg-green-100 text-green-700 border-0 rounded-full">
-              <CheckCircle2 size={10} className="mr-1" />
-              Concluído
-            </Badge>
-          ) : (
-            <Badge className="text-xs bg-amber-100 text-amber-700 border-0 rounded-full">
-              Aguardando
-            </Badge>
-          )}
+          <div className="flex items-center gap-1.5">
+            {concluida ? (
+              <Badge className="text-xs bg-green-100 text-green-700 border-0 rounded-full">
+                <CheckCircle2 size={10} className="mr-1" />
+                Concluído
+              </Badge>
+            ) : (
+              <Badge className="text-xs bg-amber-100 text-amber-700 border-0 rounded-full">
+                Aguardando
+              </Badge>
+            )}
+            {onExcluir && (
+              <button
+                onClick={() => window.confirm('Excluir esta atividade? A ação não pode ser desfeita.') && onExcluir()}
+                className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded"
+                title="Excluir"
+              >
+                <Trash2 size={12} />
+              </button>
+            )}
+          </div>
           <div className="flex gap-1.5">
             {onVerHistorico && (
               <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={onVerHistorico}>

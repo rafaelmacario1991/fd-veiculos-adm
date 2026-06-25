@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { uploadFoto, deletarFoto, type AnexoVenda } from '@/services/anexos'
+import { uploadFoto, deletarFotoTemp, type AnexoVenda } from '@/services/anexos'
 import { ImagePlus, X, Loader2, AlertCircle } from 'lucide-react'
 
 const MIN_FOTOS = 5
@@ -35,8 +35,10 @@ export default function UploadFotos({ saleId, fotos, onChange }: Props) {
         novas.push(anexo)
       }
       onChange([...fotos, ...novas])
-    } catch {
-      setErro('Erro ao enviar foto. Tente novamente.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : JSON.stringify(e)
+      console.error('[UploadFotos] erro:', e)
+      setErro(`Erro ao enviar foto: ${msg}`)
     } finally {
       setEnviando(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -45,7 +47,7 @@ export default function UploadFotos({ saleId, fotos, onChange }: Props) {
 
   async function handleRemover(anexo: AnexoVenda) {
     try {
-      await deletarFoto(anexo)
+      await deletarFotoTemp(anexo)
       onChange(fotos.filter((f) => f.id !== anexo.id))
     } catch {
       setErro('Erro ao remover foto.')

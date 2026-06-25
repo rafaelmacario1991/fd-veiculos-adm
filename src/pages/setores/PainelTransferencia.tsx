@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import { useRequererPerfil } from '@/hooks/useAuth'
+import { useAuthStore } from '@/store/authStore'
 import { listarAtividadesDoSetor, concluirAtividadePorVenda, type AtividadeComVenda } from '@/services/setores'
 import {
   listarDespachantes,
@@ -8,6 +9,7 @@ import {
   atualizarStatusTransferencia,
   type ProcessoComDespachante,
 } from '@/services/transferencias'
+import { excluirAtividadeSetor, excluirTransferencia } from '@/services/supervisor'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -19,14 +21,17 @@ import { useNavigate } from 'react-router-dom'
 import { CartaoSetor } from './PainelContratos'
 import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
 import FiltrosPainel, { STATUS_TRANSFERENCIA, type FiltrosPainelState } from '@/components/ui/FiltrosPainel'
-import { Truck, CheckCircle2, AlertTriangle, Clock, History } from 'lucide-react'
+import { Truck, CheckCircle2, AlertTriangle, Clock, History, Trash2 } from 'lucide-react'
 import type { Despachante } from '@/types'
 import type { VendaListagem } from '@/services/vendas'
+import SecaoTarefasSetor from '@/components/tarefas/SecaoTarefasSetor'
 import { statusPrazo30dias, diasRestantes, corPorStatusPrazo, formatarDataCurta } from '@/lib/prazos'
 
 export default function PainelTransferencia() {
   useRequererPerfil(['transferencia', 'supervisor'])
 
+  const { usuario } = useAuthStore()
+  const isSupervisor = usuario?.perfis.includes('supervisor') ?? false
   const [pendentes, setPendentes] = useState<AtividadeComVenda[]>([])
   const [processos, setProcessos] = useState<ProcessoComDespachante[]>([])
   const [despachantes, setDespachantes] = useState<Despachante[]>([])
@@ -93,6 +98,20 @@ export default function PainelTransferencia() {
     }
   }
 
+  async function handleExcluirAtividade(id: string) {
+    try {
+      await excluirAtividadeSetor(id)
+      await carregar()
+    } catch { /* silent */ }
+  }
+
+  async function handleExcluirProcesso(id: string) {
+    try {
+      await excluirTransferencia(id)
+      await carregar()
+    } catch { /* silent */ }
+  }
+
   async function salvarPendencia() {
     if (!processoEditando) return
     setAtualizando(true)
@@ -138,7 +157,8 @@ export default function PainelTransferencia() {
                   {aguardandoEnvio.map((a) => (
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
-                      onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}>
+                      onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onExcluir={isSupervisor ? () => handleExcluirAtividade(a.id) : undefined}>
                       <Button size="sm" onClick={() => setAtividadeEnviando(a)}>
                         <Truck size={13} className="mr-1.5" />
                         Enviar ao Despachante
@@ -188,7 +208,18 @@ export default function PainelTransferencia() {
                             )}
                           </div>
                           <div className="flex flex-col items-end gap-2 flex-shrink-0">
-                            <BadgeTransferencia status={p.status} />
+                            <div className="flex items-center gap-1.5">
+                              <BadgeTransferencia status={p.status} />
+                              {isSupervisor && (
+                                <button
+                                  onClick={() => window.confirm('Excluir este processo de transferência? A ação não pode ser desfeita.') && handleExcluirProcesso(p.id)}
+                                  className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded"
+                                  title="Excluir"
+                                >
+                                  <Trash2 size={12} />
+                                </button>
+                              )}
+                            </div>
                             <button
                               onClick={() => navigate(`/venda/${p.sale_id}`)}
                               className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
@@ -250,7 +281,18 @@ export default function PainelTransferencia() {
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-1.5">
-                          <BadgeTransferencia status={p.status} />
+                          <div className="flex items-center gap-1.5">
+                            <BadgeTransferencia status={p.status} />
+                            {isSupervisor && (
+                              <button
+                                onClick={() => window.confirm('Excluir este processo de transferência? A ação não pode ser desfeita.') && handleExcluirProcesso(p.id)}
+                                className="p-1 text-gray-300 hover:text-red-500 transition-colors rounded"
+                                title="Excluir"
+                              >
+                                <Trash2 size={12} />
+                              </button>
+                            )}
+                          </div>
                           <button
                             onClick={() => navigate(`/venda/${p.sale_id}`)}
                             className="flex items-center gap-1 text-xs text-gray-400 hover:text-gray-700 transition-colors"
@@ -267,13 +309,16 @@ export default function PainelTransferencia() {
             )}
 
             {aguardandoEnvio.length === 0 && processosAtivos.length === 0 && processosConcluidos.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="flex flex-col items-center justify-center h-48 text-center">
                 <Truck size={40} className="text-gray-300 mb-3" />
                 <p className="text-gray-500 font-medium">Nenhum processo ativo</p>
               </div>
             )}
           </>
         )}
+
+        {/* Atividades do setor */}
+        <SecaoTarefasSetor setor="transferencia" />
       </div>
 
       <ModalResumoVenda venda={vendaSelecionada} onFechar={() => setVendaSelecionada(null)} />

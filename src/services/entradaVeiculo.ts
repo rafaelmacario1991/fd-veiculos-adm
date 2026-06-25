@@ -67,6 +67,8 @@ export async function listarDocumentosEntrada(saleId: string): Promise<Documento
   return (data ?? []) as DocumentoEntrada[]
 }
 
+// Faz upload apenas no storage — sem inserir no banco.
+// Chamar salvarDocumentosNoBanco() após criarVenda() para persistir.
 export async function uploadDocumentoEntrada(
   saleId: string,
   tipo: DocumentoEntrada['tipo'],
@@ -85,22 +87,39 @@ export async function uploadDocumentoEntrada(
     .from('documentos-entrada')
     .getPublicUrl(path)
 
-  const { data, error } = await supabase
-    .from('sale_attachments')
-    .insert({
-      sale_id: saleId,
-      tipo,
-      storage_path: path,
-      url: publicUrl,
-      nome_arquivo: arquivo.name,
-    })
-    .select()
-    .single()
-
-  if (error) throw error
-  return data as DocumentoEntrada
+  return {
+    id: crypto.randomUUID(),
+    sale_id: saleId,
+    tipo,
+    storage_path: path,
+    url: publicUrl,
+    nome_arquivo: arquivo.name,
+    criado_em: new Date().toISOString(),
+  } as DocumentoEntrada
 }
 
+// Persiste todos os documentos no banco após a venda ser criada.
+export async function salvarDocumentosNoBanco(docs: DocumentoEntrada[]): Promise<void> {
+  if (!docs.length) return
+  const { error } = await supabase.from('sale_attachments').insert(
+    docs.map((d) => ({
+      id: d.id,
+      sale_id: d.sale_id,
+      tipo: d.tipo,
+      storage_path: d.storage_path,
+      url: d.url,
+      nome_arquivo: d.nome_arquivo,
+    }))
+  )
+  if (error) throw error
+}
+
+// Remove do storage antes da venda ser salva (sem registro no banco).
+export async function deletarDocumentoTemp(doc: DocumentoEntrada): Promise<void> {
+  await supabase.storage.from('documentos-entrada').remove([doc.storage_path])
+}
+
+// Remove storage + registro no banco (após venda criada).
 export async function deletarDocumentoEntrada(doc: DocumentoEntrada): Promise<void> {
   await supabase.storage.from('documentos-entrada').remove([doc.storage_path])
   const { error } = await supabase.from('sale_attachments').delete().eq('id', doc.id)

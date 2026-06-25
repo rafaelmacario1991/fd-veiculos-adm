@@ -3,7 +3,9 @@ import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useRequererPerfil } from '@/hooks/useAuth'
+import { useAuthStore } from '@/store/authStore'
 import { listarAtividadesDoSetor, concluirAtividade, type AtividadeComVenda } from '@/services/setores'
+import { excluirAtividadeSetor } from '@/services/supervisor'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -15,6 +17,7 @@ import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
 import FiltrosPainel, { STATUS_ATIVIDADE, type FiltrosPainelState } from '@/components/ui/FiltrosPainel'
 import { CheckCircle2, Receipt } from 'lucide-react'
 import type { VendaListagem } from '@/services/vendas'
+import SecaoTarefasSetor from '@/components/tarefas/SecaoTarefasSetor'
 
 const schemaNfe = z.object({
   numero_nfe: z.string().min(1, 'Obrigatório'),
@@ -26,6 +29,8 @@ type FormNfe = z.infer<typeof schemaNfe>
 export default function PainelFiscal() {
   useRequererPerfil(['fiscal', 'supervisor'])
 
+  const { usuario } = useAuthStore()
+  const isSupervisor = usuario?.perfis.includes('supervisor') ?? false
   const [atividades, setAtividades] = useState<AtividadeComVenda[]>([])
   const [carregando, setCarregando] = useState(true)
   const navigate = useNavigate()
@@ -56,6 +61,13 @@ export default function PainelFiscal() {
   function abrirRegistroNfe(atividade: AtividadeComVenda) {
     setAtividadeNfe(atividade)
     reset()
+  }
+
+  async function handleExcluir(id: string) {
+    try {
+      await excluirAtividadeSetor(id)
+      await carregar()
+    } catch { /* silent */ }
   }
 
   async function registrarNfe(dados: FormNfe) {
@@ -101,7 +113,8 @@ export default function PainelFiscal() {
                   {pendentes.map((a) => (
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
-                      onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}>
+                      onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}>
                       <Button size="sm" onClick={() => abrirRegistroNfe(a)}>
                         <Receipt size={13} className="mr-1.5" />
                         Registrar NF-e
@@ -122,6 +135,7 @@ export default function PainelFiscal() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     />
                   ))}
                 </div>
@@ -129,13 +143,16 @@ export default function PainelFiscal() {
             )}
 
             {atividades.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="flex flex-col items-center justify-center h-48 text-center">
                 <CheckCircle2 size={40} className="text-green-300 mb-3" />
                 <p className="text-gray-500 font-medium">Nenhum processo registrado</p>
               </div>
             )}
           </>
         )}
+
+        {/* Atividades do setor */}
+        <SecaoTarefasSetor setor="fiscal" />
       </div>
 
       <ModalResumoVenda venda={vendaSelecionada} onFechar={() => setVendaSelecionada(null)} />

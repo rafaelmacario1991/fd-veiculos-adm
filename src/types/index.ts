@@ -12,7 +12,16 @@ export type Perfil =
 
 export type StatusVenda = 'iniciada' | 'pendencia_vendedor' | 'concluida'
 
-export type FormaPagamento = 'a_vista' | 'cartao' | 'financiamento'
+export type FormaPagamento = string
+
+export interface MetodoPagamentoItem {
+  tipo: string
+  valor: number
+  banco?: string
+  numero_parcelas?: number
+  valor_parcela?: number
+  data_primeiro_pagamento?: string
+}
 
 export type StatusTransferencia = 'enviado' | 'pendencia' | 'concluido'
 
@@ -88,10 +97,32 @@ export interface AtividadeSetor {
   sale_id: string
   setor: SetorAtividade
   status: StatusAtividade
+  prazo?: string
   dados_json?: Record<string, unknown>
   concluido_em?: string
   concluido_por?: string
   criado_em: string
+}
+
+export interface Tarefa {
+  id: string
+  titulo: string
+  descricao?: string
+  setor_responsavel?: string
+  usuario_responsavel_id?: string
+  criado_por_id: string
+  sale_id?: string
+  prazo: string
+  status: 'aberta' | 'concluida'
+  criado_em: string
+  concluido_em?: string
+  concluido_por_id?: string
+  anexo_path?: string
+  anexo_nome?: string
+  // Dados de join (preenchidos por listarTarefas)
+  criado_por?: { id: string; nome: string }
+  responsavel?: { id: string; nome: string }
+  concluido_por?: { id: string; nome: string }
 }
 
 export interface PendenciaVendedor {

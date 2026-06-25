@@ -1,13 +1,18 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { buscarDetalheVenda, type DetalheVenda } from '@/services/detalhes'
+import {
+  excluirVenda, excluirAtividadeSetor,
+  excluirPendenciaVendedor, excluirTransferencia,
+} from '@/services/supervisor'
+import { useAuthStore } from '@/store/authStore'
 import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
 import type { VendaListagem } from '@/services/vendas'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  ArrowLeft, Eye,
+  ArrowLeft, Eye, Trash2,
   CheckCircle2, Clock, AlertTriangle, Circle,
 } from 'lucide-react'
 
@@ -59,9 +64,10 @@ interface PassoProps {
   data?: string | null
   ultimo?: boolean
   children?: React.ReactNode
+  onExcluir?: () => void
 }
 
-function Passo({ icone, titulo, estado, data, ultimo, children }: PassoProps) {
+function Passo({ icone, titulo, estado, data, ultimo, children, onExcluir }: PassoProps) {
   const labels: Record<EstadoPasso, string> = {
     concluido: 'Concluído',
     pendente: 'Em andamento',
@@ -95,6 +101,15 @@ function Passo({ icone, titulo, estado, data, ultimo, children }: PassoProps) {
           <Badge className={`text-[10px] px-2 py-0 border-0 rounded-full ${badgeClasses[estado]}`}>
             {labels[estado]}
           </Badge>
+          {onExcluir && (
+            <button
+              onClick={onExcluir}
+              className="ml-auto p-1 text-gray-300 hover:text-red-500 transition-colors rounded"
+              title="Excluir"
+            >
+              <Trash2 size={13} />
+            </button>
+          )}
         </div>
         {data && (
           <p className="text-xs text-gray-400 mb-2">{data}</p>
@@ -125,9 +140,48 @@ function InfoLinha({ label, valor }: { label: string; valor?: string | null }) {
 export default function DetalheVenda() {
   const { saleId } = useParams<{ saleId: string }>()
   const navigate = useNavigate()
+  const { usuario } = useAuthStore()
+  const isSupervisor = usuario?.perfis.includes('supervisor') ?? false
+
   const [venda, setVenda] = useState<DetalheVenda | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [mostrarResumo, setMostrarResumo] = useState(false)
+
+  // Exclusão do processo inteiro
+  const [confirmarExclusao, setConfirmarExclusao] = useState(false)
+  const [excluindo, setExcluindo] = useState(false)
+  const [erroExclusao, setErroExclusao] = useState<string | null>(null)
+
+  async function handleExcluirVenda() {
+    if (!saleId) return
+    setExcluindo(true)
+    setErroExclusao(null)
+    try {
+      await excluirVenda(saleId)
+      navigate(-1)
+    } catch {
+      setErroExclusao('Erro ao excluir o processo. Tente novamente.')
+      setExcluindo(false)
+    }
+  }
+
+  async function handleExcluirAtividade(atividadeId: string) {
+    if (!window.confirm('Excluir esta atividade? A ação não pode ser desfeita.')) return
+    await excluirAtividadeSetor(atividadeId)
+    if (saleId) buscarDetalheVenda(saleId).then(setVenda)
+  }
+
+  async function handleExcluirPendencia(pendenciaId: string) {
+    if (!window.confirm('Excluir esta pendência? A ação não pode ser desfeita.')) return
+    await excluirPendenciaVendedor(pendenciaId)
+    if (saleId) buscarDetalheVenda(saleId).then(setVenda)
+  }
+
+  async function handleExcluirTransferencia(processoId: string) {
+    if (!window.confirm('Excluir este processo de transferência? A ação não pode ser desfeita.')) return
+    await excluirTransferencia(processoId)
+    if (saleId) buscarDetalheVenda(saleId).then(setVenda)
+  }
 
   useEffect(() => {
     if (!saleId) return
@@ -215,6 +269,17 @@ export default function DetalheVenda() {
               <Eye size={13} className="mr-1.5" />
               Ver Resumo
             </Button>
+            {isSupervisor && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => setConfirmarExclusao(true)}
+              >
+                <Trash2 size={13} className="mr-1.5" />
+                Excluir Processo
+              </Button>
+            )}
           </div>
         }
       />
@@ -266,6 +331,12 @@ export default function DetalheVenda() {
             titulo="Pendências do Vendedor"
             estado={estadoPendencias}
             icone={<></>}
+            onExcluir={isSupervisor && (pVistoria || pFirma)
+              ? () => {
+                  if (pVistoria) handleExcluirPendencia(pVistoria.id)
+                  if (pFirma) handleExcluirPendencia(pFirma.id)
+                }
+              : undefined}
           >
             {[pVistoria, pFirma].filter(Boolean).map((p) => {
               if (!p) return null
@@ -296,6 +367,7 @@ export default function DetalheVenda() {
             estado={estadoSetor('contratos')}
             data={atv('contratos')?.concluido_em ? fmtData(atv('contratos')!.concluido_em) : undefined}
             icone={<></>}
+            onExcluir={isSupervisor && atv('contratos') ? () => handleExcluirAtividade(atv('contratos')!.id) : undefined}
           >
             {atv('contratos')?.status === 'concluida' ? (
               <>
@@ -315,6 +387,7 @@ export default function DetalheVenda() {
             estado={estadoFinanceiro}
             data={atv('financeiro')?.concluido_em ? fmtData(atv('financeiro')!.concluido_em) : undefined}
             icone={<></>}
+            onExcluir={isSupervisor && atv('financeiro') ? () => handleExcluirAtividade(atv('financeiro')!.id) : undefined}
           >
             {venda.pendencias_financeiras.length > 0 ? (
               <div className="space-y-1">
@@ -351,6 +424,7 @@ export default function DetalheVenda() {
             estado={estadoSetor('fiscal')}
             data={atv('fiscal')?.concluido_em ? fmtData(atv('fiscal')!.concluido_em) : undefined}
             icone={<></>}
+            onExcluir={isSupervisor && atv('fiscal') ? () => handleExcluirAtividade(atv('fiscal')!.id) : undefined}
           >
             {atv('fiscal')?.status === 'concluida' ? (
               <>
@@ -376,6 +450,7 @@ export default function DetalheVenda() {
             data={tr ? fmtData(tr.data_envio) : undefined}
             ultimo
             icone={<></>}
+            onExcluir={isSupervisor && tr ? () => handleExcluirTransferencia(tr.id) : undefined}
           >
             {tr ? (
               <>
@@ -401,6 +476,50 @@ export default function DetalheVenda() {
           </Passo>
         </div>
       </div>
+
+      {/* Modal confirmação exclusão */}
+      {confirmarExclusao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-sm w-full">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 rounded-full bg-red-100 flex items-center justify-center flex-shrink-0">
+                <Trash2 size={18} className="text-red-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-semibold text-gray-900">Excluir processo</h3>
+                <p className="text-xs text-gray-500 mt-0.5">Esta ação não pode ser desfeita</p>
+              </div>
+            </div>
+            <p className="text-sm text-gray-700 mb-1">
+              Tem certeza que deseja excluir o processo de venda de{' '}
+              <strong>{venda.marca} {venda.modelo} — {venda.placa.toUpperCase()}</strong>?
+            </p>
+            <p className="text-xs text-gray-500 mb-5">
+              Todas as atividades, pendências, transferência e documentos serão permanentemente removidos.
+            </p>
+            {erroExclusao && (
+              <p className="text-xs text-red-600 mb-3">{erroExclusao}</p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => { setConfirmarExclusao(false); setErroExclusao(null) }}
+                disabled={excluindo}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1 bg-red-600 hover:bg-red-700 text-white"
+                onClick={handleExcluirVenda}
+                disabled={excluindo}
+              >
+                {excluindo ? 'Excluindo...' : 'Sim, excluir'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal Resumo de Venda */}
       <ModalResumoVenda

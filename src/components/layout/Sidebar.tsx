@@ -5,7 +5,7 @@ import { supabase } from '@/services/supabase'
 import {
   Car, FileText, DollarSign, Receipt, Truck, Users, UserCog,
   LogOut, LayoutDashboard, PlusCircle, ShieldCheck, BarChart2,
-  ChevronUp, Settings, X, Sun, Moon,
+  ChevronUp, Settings, X, Sun, Moon, House,
 } from 'lucide-react'
 import ModalPerfil from './ModalPerfil'
 import fdLogo from '@/assets/fd-logo.png'
@@ -61,8 +61,8 @@ export default function Sidebar({ onNavegar, tema, onAlternarTema }: SidebarProp
   const perfis = usuario?.perfis ?? []
 
   const itensVendedor: ItemNav[] = [
-    { label: 'Minhas Vendas', href: '/vendedor', icone: <Car size={16} /> },
     { label: 'Nova Venda', href: '/vendedor/nova-venda', icone: <PlusCircle size={16} /> },
+    { label: 'Minhas Vendas', href: '/vendedor', icone: <Car size={16} /> },
     ...(perfis.includes('supervisor')
       ? [{ label: 'Quadro de Vendas', href: '/supervisor/quadro-vendas', icone: <BarChart2 size={16} /> }]
       : []),
@@ -116,6 +116,13 @@ export default function Sidebar({ onNavegar, tema, onAlternarTema }: SidebarProp
 
         {/* Navegação */}
         <nav className="flex-1 py-4 px-3 space-y-5 overflow-y-auto">
+          {/* Início — visível para todos */}
+          <GrupoNav
+            titulo="Geral"
+            itens={[{ label: 'Início', href: '/inicio', icone: <House size={16} /> }]}
+            onNavegar={navegar}
+          />
+
           {perfis.includes('vendedor') && (
             <GrupoNav titulo="Vendas" itens={itensVendedor} onNavegar={navegar} />
           )}
@@ -137,11 +144,11 @@ export default function Sidebar({ onNavegar, tema, onAlternarTema }: SidebarProp
                 <p className="text-[10px] text-gray-400 truncate">{usuario?.email}</p>
               </div>
               <button
-                onClick={() => { setMenuAberto(false); setModalPerfilAberto(true) }}
+                onClick={() => { setMenuAberto(false); navigate('/configuracoes') }}
                 className="w-full flex items-center gap-2.5 px-3 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 transition-colors"
               >
                 <Settings size={14} className="text-gray-400" />
-                Minha Conta
+                Configurações
               </button>
 
               {/* Toggle de tema */}

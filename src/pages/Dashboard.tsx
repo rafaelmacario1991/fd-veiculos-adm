@@ -17,13 +17,8 @@ export default function Dashboard() {
 
     const perfis = usuario.perfis
 
-    if (perfis.includes('supervisor')) {
-      navigate('/supervisor', { replace: true })
-    } else if (perfis.includes('vendedor')) {
-      navigate('/vendedor', { replace: true })
-    } else if (perfis.length > 0) {
-      // Usuário somente administrativo — vai para o primeiro setor
-      navigate(`/setor/${perfis[0]}`, { replace: true })
+    if (perfis.length > 0) {
+      navigate('/inicio', { replace: true })
     } else {
       // Sem perfis — aguarda configuração pelo supervisor
       navigate('/sem-acesso', { replace: true })

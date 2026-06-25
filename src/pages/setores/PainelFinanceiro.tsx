@@ -18,11 +18,14 @@ import FiltrosPainel, { STATUS_ATIVIDADE, type FiltrosPainelState } from '@/comp
 import { CheckCircle2, PlusCircle, X } from 'lucide-react'
 import type { PendenciaFinanceira } from '@/types'
 import type { VendaListagem } from '@/services/vendas'
+import SecaoTarefasSetor from '@/components/tarefas/SecaoTarefasSetor'
+import { excluirAtividadeSetor } from '@/services/supervisor'
 
 export default function PainelFinanceiro() {
   useRequererPerfil(['financeiro', 'supervisor'])
 
   const { usuario } = useAuthStore()
+  const isSupervisor = usuario?.perfis.includes('supervisor') ?? false
   const navigate = useNavigate()
   const [atividades, setAtividades] = useState<AtividadeComVenda[]>([])
   const [filtros, setFiltros] = useState<FiltrosPainelState>({ de: '', ate: '', status: '' })
@@ -85,6 +88,13 @@ export default function PainelFinanceiro() {
     } catch { /* silent */ }
   }
 
+  async function handleExcluir(id: string) {
+    try {
+      await excluirAtividadeSetor(id)
+      await carregar()
+    } catch { /* silent */ }
+  }
+
   const pendentes = atividades.filter((a) => a.status === 'pendente')
   const concluidas = atividades.filter((a) => a.status === 'concluida')
 
@@ -121,6 +131,7 @@ export default function PainelFinanceiro() {
                 <CartaoSetor key={a.id} atividade={a}
                   onVerResumo={() => setVendaSelecionada(a.sales)}
                   onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                  onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                   extra={
                     <div className="mt-3 pt-3 border-t border-gray-100 space-y-2">
                       {/* Pendências existentes */}
@@ -194,6 +205,7 @@ export default function PainelFinanceiro() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     />
                   ))}
                 </div>
@@ -201,13 +213,16 @@ export default function PainelFinanceiro() {
             )}
 
             {atividades.length === 0 && (
-              <div className="flex flex-col items-center justify-center h-64 text-center">
+              <div className="flex flex-col items-center justify-center h-48 text-center">
                 <CheckCircle2 size={40} className="text-green-300 mb-3" />
                 <p className="text-gray-500 font-medium">Nenhum processo registrado</p>
               </div>
             )}
           </>
         )}
+
+        {/* Atividades do setor */}
+        <SecaoTarefasSetor setor="financeiro" />
       </div>
 
       <ModalResumoVenda venda={vendaSelecionada} onFechar={() => setVendaSelecionada(null)} />

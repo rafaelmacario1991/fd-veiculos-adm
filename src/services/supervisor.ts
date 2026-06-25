@@ -235,3 +235,27 @@ export async function listarAtividadesSetor(
   if (error) throw error
   return (data ?? []) as unknown as AtividadeDetalhe[]
 }
+
+// ── Exclusões (apenas supervisor) ──────────────────────────────────
+
+export async function excluirVenda(saleId: string): Promise<void> {
+  // notifications_log não tem CASCADE — remove antes
+  await supabase.from('notifications_log').delete().eq('sale_id', saleId)
+  const { error } = await supabase.from('sales').delete().eq('id', saleId)
+  if (error) throw error
+}
+
+export async function excluirAtividadeSetor(atividadeId: string): Promise<void> {
+  const { error } = await supabase.from('sector_activities').delete().eq('id', atividadeId)
+  if (error) throw error
+}
+
+export async function excluirPendenciaVendedor(pendenciaId: string): Promise<void> {
+  const { error } = await supabase.from('seller_pendencies').delete().eq('id', pendenciaId)
+  if (error) throw error
+}
+
+export async function excluirTransferencia(processoId: string): Promise<void> {
+  const { error } = await supabase.from('transfer_processes').delete().eq('id', processoId)
+  if (error) throw error
+}

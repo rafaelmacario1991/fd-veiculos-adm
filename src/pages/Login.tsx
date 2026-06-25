@@ -128,6 +128,15 @@ export default function Login() {
           <Button type="submit" className="w-full" disabled={carregando}>
             {carregando ? 'Entrando...' : 'Entrar'}
           </Button>
+
+          <div className="text-center pt-1">
+            <a
+              href="/esqueci-senha"
+              className="text-xs text-blue-600 hover:text-blue-800 hover:underline"
+            >
+              Esqueci minha senha
+            </a>
+          </div>
         </form>
       </div>
     </div>

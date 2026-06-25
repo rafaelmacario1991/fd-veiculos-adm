@@ -1,6 +1,6 @@
 import { addHours } from 'date-fns'
 import { supabase } from './supabase'
-import type { StatusVenda, FormaPagamento, PendenciaVendedor, AtividadeSetor } from '@/types'
+import type { StatusVenda, FormaPagamento, MetodoPagamentoItem, PendenciaVendedor, AtividadeSetor } from '@/types'
 
 // Tipo retornado nas listagens (join com Supabase)
 export interface VendaListagem {
@@ -55,8 +55,8 @@ export interface DadosNovaVenda {
   ano_modelo: number
   cor: string
   placa: string
-  renavam: string
-  chassi: string
+  renavam?: string
+  chassi?: string
   quilometragem: number
   valor_venda: number
   comprador_nome: string
@@ -73,10 +73,7 @@ export interface DadosNovaVenda {
   comprador_telefone: string
   comprador_email?: string
   forma_pagamento: FormaPagamento
-  banco_financeira?: string
-  valor_entrada?: number
-  valor_financiado?: number
-  numero_parcelas?: number
+  formas_pagamento_json: MetodoPagamentoItem[]
   observacoes?: string
 }
 
@@ -120,14 +117,15 @@ export async function criarVenda(dados: DadosNovaVenda, vendedorId: string, id?:
   const saleId = venda.id
   const prazo72h = addHours(new Date(), 72).toISOString()
 
-  // 2. Criar demandas dos 4 setores
+  // 2. Criar demandas dos 4 setores (prazo padrão: 24h)
+  const prazo24h = addHours(new Date(), 24).toISOString()
   const { error: erroAtividades } = await supabase
     .from('sector_activities')
     .insert([
-      { sale_id: saleId, setor: 'contratos' },
-      { sale_id: saleId, setor: 'financeiro' },
-      { sale_id: saleId, setor: 'fiscal' },
-      { sale_id: saleId, setor: 'transferencia' },
+      { sale_id: saleId, setor: 'contratos',     prazo: prazo24h },
+      { sale_id: saleId, setor: 'financeiro',    prazo: prazo24h },
+      { sale_id: saleId, setor: 'fiscal',        prazo: prazo24h },
+      { sale_id: saleId, setor: 'transferencia', prazo: prazo24h },
     ])
 
   if (erroAtividades) throw erroAtividades

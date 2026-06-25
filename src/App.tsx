@@ -2,6 +2,8 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import Layout from '@/components/layout/Layout'
 import Login from '@/pages/Login'
+import EsqueciSenha from '@/pages/EsqueciSenha'
+import NovaSenha from '@/pages/NovaSenha'
 import Dashboard from '@/pages/Dashboard'
 import PainelVendedor from '@/pages/vendedor/PainelVendedor'
 import NovaVenda from '@/pages/vendedor/NovaVenda'
@@ -16,6 +18,8 @@ import ListaSupervisor from '@/pages/supervisor/ListaSupervisor'
 import Aprovacoes from '@/pages/supervisor/Aprovacoes'
 import QuadroVendas from '@/pages/supervisor/QuadroVendas'
 import DetalheVenda from '@/pages/DetalheVenda'
+import Inicio from '@/pages/Inicio'
+import Configuracoes from '@/pages/Configuracoes'
 
 function App() {
   const { carregando } = useAuth()
@@ -31,11 +35,15 @@ function App() {
   return (
     <BrowserRouter>
       <Routes>
-        {/* Rota pública */}
+        {/* Rotas públicas */}
         <Route path="/login" element={<Login />} />
+        <Route path="/esqueci-senha" element={<EsqueciSenha />} />
+        <Route path="/nova-senha" element={<NovaSenha />} />
 
         {/* Rotas protegidas — dentro do Layout */}
         <Route element={<Layout />}>
+          <Route path="/inicio" element={<Inicio />} />
+          <Route path="/configuracoes" element={<Configuracoes />} />
           <Route path="/dashboard" element={<Dashboard />} />
 
           {/* Vendedor */}

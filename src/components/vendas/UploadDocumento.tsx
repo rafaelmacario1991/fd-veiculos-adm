@@ -1,7 +1,7 @@
 import { useRef, useState } from 'react'
 import {
   uploadDocumentoEntrada,
-  deletarDocumentoEntrada,
+  deletarDocumentoTemp,
   type DocumentoEntrada,
 } from '@/services/entradaVeiculo'
 import { FileUp, Loader2, X, FileCheck, AlertCircle } from 'lucide-react'
@@ -33,8 +33,10 @@ export default function UploadDocumento({ saleId, tipo, label, documentos, onCha
         novos.push(doc)
       }
       onChange([...documentos, ...novos])
-    } catch {
-      setErro('Erro ao enviar arquivo. Tente novamente.')
+    } catch (e: unknown) {
+      const msg = e instanceof Error ? e.message : JSON.stringify(e)
+      console.error('[UploadDocumento] erro:', e)
+      setErro(`Erro ao enviar arquivo: ${msg}`)
     } finally {
       setEnviando(false)
       if (inputRef.current) inputRef.current.value = ''
@@ -43,7 +45,7 @@ export default function UploadDocumento({ saleId, tipo, label, documentos, onCha
 
   async function handleRemover(doc: DocumentoEntrada) {
     try {
-      await deletarDocumentoEntrada(doc)
+      await deletarDocumentoTemp(doc)
       onChange(documentos.filter((d) => d.id !== doc.id))
     } catch {
       setErro('Erro ao remover arquivo.')
