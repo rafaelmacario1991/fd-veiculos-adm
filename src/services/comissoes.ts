@@ -14,6 +14,17 @@ export interface Comissao {
   criado_em: string
 }
 
+export interface ComissaoConfig {
+  vendedor_id: string
+  salario_base: number
+  valor_faixa1: number
+  meta_vendas: number
+  valor_faixa2: number
+  meta_vendas2: number
+  valor_faixa3: number
+  atualizado_em: string
+}
+
 export interface DadosNovaComissao {
   tipo: TipoComissao
   descricao?: string
@@ -23,9 +34,71 @@ export interface DadosNovaComissao {
   valor_comissao: number
 }
 
-export function calcularComissaoFinanciamento(valorFinanciado: number, retorno: number): number {
+// ── Cálculos ────────────────────────────────────────────────────
+
+export function calcularRetornoFinanciamento(valorFinanciado: number, retorno: number): number {
   return ((valorFinanciado * retorno) * 0.75) * 0.001
 }
+
+export function calcularFaixa(config: ComissaoConfig, totalVendasAtuais: number): {
+  faixa: 1 | 2 | 3
+  valorBase: number
+} {
+  let faixa: 1 | 2 | 3
+  if (totalVendasAtuais < config.meta_vendas) faixa = 1
+  else if (totalVendasAtuais < config.meta_vendas2) faixa = 2
+  else faixa = 3
+
+  const valorBase =
+    faixa === 1 ? config.valor_faixa1 :
+    faixa === 2 ? config.valor_faixa2 :
+    config.valor_faixa3
+
+  return { faixa, valorBase }
+}
+
+// ── Comissão config ──────────────────────────────────────────────
+
+export async function buscarConfig(vendedorId: string): Promise<ComissaoConfig | null> {
+  const { data, error } = await supabase
+    .from('comissao_config')
+    .select('*')
+    .eq('vendedor_id', vendedorId)
+    .maybeSingle()
+
+  if (error) throw error
+  return data as ComissaoConfig | null
+}
+
+export async function salvarConfig(
+  vendedorId: string,
+  config: Pick<ComissaoConfig, 'salario_base' | 'valor_faixa1' | 'meta_vendas' | 'valor_faixa2' | 'meta_vendas2' | 'valor_faixa3'>
+): Promise<void> {
+  const { error } = await supabase
+    .from('comissao_config')
+    .upsert({ vendedor_id: vendedorId, ...config, atualizado_em: new Date().toISOString() })
+
+  if (error) throw error
+}
+
+// Calcula o valor de uma entrada considerando o tier atual (retroativo)
+export function calcularValorEntrada(
+  comissao: Comissao,
+  valorBase: number
+): number {
+  if (comissao.tipo === 'financiamento') {
+    const retorno =
+      comissao.valor_financiado != null && comissao.retorno != null
+        ? calcularRetornoFinanciamento(comissao.valor_financiado, comissao.retorno)
+        : 0
+    return valorBase + retorno
+  }
+  if (comissao.tipo === 'a_vista') return valorBase
+  // transferencia e vale usam o valor armazenado
+  return comissao.valor_comissao
+}
+
+// ── Entradas de comissão ─────────────────────────────────────────
 
 export async function listarComissoes(vendedorId: string): Promise<Comissao[]> {
   const { data, error } = await supabase

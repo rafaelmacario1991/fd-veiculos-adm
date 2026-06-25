@@ -239,3 +239,21 @@ body {
 .dark ::-webkit-scrollbar-track  { background: oklch(0.18 0 0); }
 .dark ::-webkit-scrollbar-thumb  { background: oklch(0.35 0 0); border-radius: 3px; }
 .dark ::-webkit-scrollbar-thumb:hover { background: oklch(0.45 0 0); }
+
+/* ============================================================
+   Print / Salvar PDF
+   ============================================================ */
+@media print {
+  @page { margin: 1.5cm; size: A4; }
+
+  body { background: white !important; }
+
+  /* Oculta shell do app */
+  .print-hidden { display: none !important; }
+
+  /* Exibe conteúdo exclusivo de impressão */
+  .print-only { display: block !important; }
+
+  /* Remove sombras e bordas coloridas no print */
+  * { box-shadow: none !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

@@ -324,7 +324,6 @@ export default function ModalDetalhesTarefa({ tarefa, onFechar, onAtualizada }: 
           </div>
         </div>
       </div>
-      </div>
     </div>
   )
 }

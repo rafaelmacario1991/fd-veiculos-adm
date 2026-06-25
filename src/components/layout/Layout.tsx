@@ -41,6 +41,7 @@ export default function Layout() {
 
       {/* Sidebar */}
       <div className={`
+        print-hidden
         fixed inset-y-0 left-0 z-40 transition-transform duration-300 ease-in-out
         md:static md:translate-x-0 md:z-auto md:transition-none
         ${sidebarAberta ? 'translate-x-0' : '-translate-x-full'}
@@ -51,7 +52,7 @@ export default function Layout() {
       {/* Conteúdo principal */}
       <div className="flex-1 flex flex-col min-w-0 min-h-screen">
         {/* Barra mobile com hamburger */}
-        <div className="h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 md:hidden flex-shrink-0">
+        <div className="print-hidden h-14 bg-white border-b border-gray-200 flex items-center px-4 gap-3 md:hidden flex-shrink-0">
           <button
             onClick={() => setSidebarAberta(true)}
             className="p-2 rounded-lg text-gray-500 hover:bg-gray-100 transition-colors"
