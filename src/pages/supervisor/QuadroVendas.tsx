@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { format, parseISO } from 'date-fns'
+import { ptBR } from 'date-fns/locale'
 import { useRequererPerfil } from '@/hooks/useAuth'
 import {
   buscarDadosQuadro,
@@ -6,12 +8,25 @@ import {
   type ResumoQuadro,
   type Vendedor,
 } from '@/services/analytics'
+import {
+  listarTodasVendas,
+  cancelarVenda,
+  excluirVenda,
+  type VendaListagem,
+} from '@/services/vendas'
 import Header from '@/components/layout/Header'
 import {
   BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell,
 } from 'recharts'
-import { TrendingUp, ShoppingBag, DollarSign, BarChart2, Users } from 'lucide-react'
+import {
+  TrendingUp, ShoppingBag, DollarSign, BarChart2, Users,
+  List, Trash2, Ban, AlertTriangle,
+} from 'lucide-react'
+import { Button } from '@/components/ui/button'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog'
 
 const CORES_PIZZA = ['#1E40AF', '#DC2626', '#059669', '#D97706', '#7C3AED', '#0891B2']
 
@@ -30,34 +45,90 @@ const RESUMO_ZERO: ResumoQuadro = {
   porFormaPagamento: [], porBanco: [], porVendedor: [], porSemana: [], porDia: [],
 }
 
+const STATUS_LABEL: Record<string, string> = {
+  iniciada:          'Iniciada',
+  pendencia_vendedor: 'Pend. Vendedor',
+  concluida:         'Concluída',
+  cancelada:         'Cancelada',
+}
+const STATUS_COR: Record<string, string> = {
+  iniciada:          'bg-blue-100 text-blue-700',
+  pendencia_vendedor: 'bg-amber-100 text-amber-700',
+  concluida:         'bg-green-100 text-green-700',
+  cancelada:         'bg-gray-100 text-gray-500 line-through',
+}
+
+type Aba = 'analise' | 'lista'
+type AcaoConfirm = { tipo: 'cancelar' | 'excluir'; venda: VendaListagem } | null
+
 export default function QuadroVendas() {
   useRequererPerfil(['supervisor'])
 
+  const [aba, setAba] = useState<Aba>('analise')
+
+  // Filtros compartilhados
   const [de, setDe] = useState(inicioMes)
   const [ate, setAte] = useState(hoje)
   const [vendedorId, setVendedorId] = useState('')
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
+
+  // Aba análise
   const [dados, setDados] = useState<ResumoQuadro>(RESUMO_ZERO)
-  const [carregando, setCarregando] = useState(true)
+  const [carregandoAnalise, setCarregandoAnalise] = useState(true)
+
+  // Aba lista
+  const [vendas, setVendas]           = useState<VendaListagem[]>([])
+  const [carregandoLista, setCarregandoLista] = useState(false)
+  const [acaoConfirm, setAcaoConfirm] = useState<AcaoConfirm>(null)
+  const [executando, setExecutando]   = useState(false)
+  const [erroAcao, setErroAcao]       = useState<string | null>(null)
 
   useEffect(() => {
     listarVendedores().then(setVendedores)
   }, [])
 
   useEffect(() => {
-    setCarregando(true)
+    if (aba !== 'analise') return
+    setCarregandoAnalise(true)
     buscarDadosQuadro({ de, ate, vendedorId: vendedorId || undefined })
       .then(setDados)
       .catch(console.error)
-      .finally(() => setCarregando(false))
-  }, [de, ate, vendedorId])
+      .finally(() => setCarregandoAnalise(false))
+  }, [de, ate, vendedorId, aba])
+
+  useEffect(() => {
+    if (aba !== 'lista') return
+    setCarregandoLista(true)
+    listarTodasVendas({ de, ate })
+      .then(setVendas)
+      .catch(console.error)
+      .finally(() => setCarregandoLista(false))
+  }, [de, ate, aba])
 
   const diasLegenda = dados.porDia.map((d) => ({
     ...d,
     diaLabel: d.dia.slice(5).replace('-', '/'),
   }))
 
-  const semanasLegenda = dados.porSemana
+  async function confirmarAcao() {
+    if (!acaoConfirm) return
+    setExecutando(true)
+    setErroAcao(null)
+    try {
+      if (acaoConfirm.tipo === 'cancelar') {
+        await cancelarVenda(acaoConfirm.venda.id)
+      } else {
+        await excluirVenda(acaoConfirm.venda.id)
+      }
+      setAcaoConfirm(null)
+      const novas = await listarTodasVendas({ de, ate })
+      setVendas(novas)
+    } catch {
+      setErroAcao(`Erro ao ${acaoConfirm.tipo === 'cancelar' ? 'cancelar' : 'excluir'} a venda.`)
+    } finally {
+      setExecutando(false)
+    }
+  }
 
   return (
     <div className="flex flex-col flex-1">
@@ -65,9 +136,29 @@ export default function QuadroVendas() {
 
       <div className="flex-1 p-4 md:p-6 space-y-6">
 
+        {/* Abas */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+          {([
+            { id: 'analise', label: 'Análise', icon: <BarChart2 size={14} /> },
+            { id: 'lista',   label: 'Lista de Vendas', icon: <List size={14} /> },
+          ] as { id: Aba; label: string; icon: React.ReactNode }[]).map(({ id, label, icon }) => (
+            <button
+              key={id}
+              onClick={() => setAba(id)}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                aba === id
+                  ? 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+
         {/* Filtros */}
         <div className="bg-white border border-gray-200 rounded-xl px-4 py-3 space-y-2 md:space-y-0 md:flex md:flex-wrap md:items-center md:gap-3">
-          {/* Período + atalhos */}
           <div className="flex flex-wrap items-center gap-1.5">
             <input type="date" value={de} onChange={(e) => setDe(e.target.value)}
               className="text-sm border border-gray-200 rounded-lg px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -88,262 +179,348 @@ export default function QuadroVendas() {
             ))}
           </div>
 
-          {/* Filtro vendedor */}
-          <div className="flex items-center gap-2 md:ml-auto">
-            <Users size={14} className="text-gray-400 flex-shrink-0" />
-            <select
-              value={vendedorId}
-              onChange={(e) => setVendedorId(e.target.value)}
-              className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
-            >
-              <option value="">Todos os vendedores</option>
-              {vendedores.map((v) => (
-                <option key={v.id} value={v.id}>{v.nome}</option>
-              ))}
-            </select>
-          </div>
+          {aba === 'analise' && (
+            <div className="flex items-center gap-2 md:ml-auto">
+              <Users size={14} className="text-gray-400 flex-shrink-0" />
+              <select
+                value={vendedorId}
+                onChange={(e) => setVendedorId(e.target.value)}
+                className="text-sm border border-gray-200 rounded-lg px-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-500 w-full md:w-auto"
+              >
+                <option value="">Todos os vendedores</option>
+                {vendedores.map((v) => (
+                  <option key={v.id} value={v.id}>{v.nome}</option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
-        {carregando && <p className="text-gray-400 text-sm">Carregando...</p>}
-
-        {!carregando && (
+        {/* ── ABA: ANÁLISE ── */}
+        {aba === 'analise' && (
           <>
-            {/* KPIs principais */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <CardKpi
-                icone={<ShoppingBag size={18} className="text-blue-600" />}
-                titulo="Total de Vendas"
-                valor={dados.totalVendas.toString()}
-                bgIcone="bg-blue-50"
-              />
-              <CardKpi
-                icone={<DollarSign size={18} className="text-green-600" />}
-                titulo="Faturamento Total"
-                valor={formatarMoeda(dados.valorTotal)}
-                bgIcone="bg-green-50"
-              />
-              <CardKpi
-                icone={<TrendingUp size={18} className="text-purple-600" />}
-                titulo="Ticket Médio"
-                valor={formatarMoeda(dados.ticketMedio)}
-                bgIcone="bg-purple-50"
-              />
-            </div>
+            {carregandoAnalise && <p className="text-gray-400 text-sm">Carregando...</p>}
+            {!carregandoAnalise && (
+              <>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                  <CardKpi icone={<ShoppingBag size={18} className="text-blue-600" />} titulo="Total de Vendas" valor={dados.totalVendas.toString()} bgIcone="bg-blue-50" />
+                  <CardKpi icone={<DollarSign size={18} className="text-green-600" />} titulo="Faturamento Total" valor={formatarMoeda(dados.valorTotal)} bgIcone="bg-green-50" />
+                  <CardKpi icone={<TrendingUp size={18} className="text-purple-600" />} titulo="Ticket Médio" valor={formatarMoeda(dados.ticketMedio)} bgIcone="bg-purple-50" />
+                </div>
 
-            {/* Gráfico de vendas diárias + pizza de forma de pagamento */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Barras por dia */}
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <BarChart2 size={15} className="text-blue-600" />
-                  Vendas por Dia
-                </p>
-                {diasLegenda.length === 0 ? (
-                  <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Sem dados no período</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <BarChart data={diasLegenda} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                      <XAxis dataKey="diaLabel" tick={{ fontSize: 11 }} />
-                      <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                      <Tooltip
-                        formatter={(value) => [value, 'Vendas']}
-                        labelStyle={{ fontSize: 12 }}
-                        contentStyle={{ fontSize: 12 }}
-                      />
-                      <Bar dataKey="qtd" fill="#1E40AF" radius={[3, 3, 0, 0]} />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </div>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                      <BarChart2 size={15} className="text-blue-600" />
+                      Vendas por Dia
+                    </p>
+                    {diasLegenda.length === 0 ? (
+                      <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Sem dados no período</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <BarChart data={diasLegenda} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                          <XAxis dataKey="diaLabel" tick={{ fontSize: 11 }} />
+                          <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                          <Tooltip formatter={(value) => [value, 'Vendas']} labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 12 }} />
+                          <Bar dataKey="qtd" fill="#1E40AF" radius={[3, 3, 0, 0]} />
+                        </BarChart>
+                      </ResponsiveContainer>
+                    )}
+                  </div>
 
-              {/* Pizza de forma de pagamento */}
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <DollarSign size={15} className="text-green-600" />
-                  Canal de Vendas
-                </p>
-                {dados.porFormaPagamento.length === 0 ? (
-                  <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Sem dados no período</div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={200}>
-                    <PieChart>
-                      <Pie
-                        data={dados.porFormaPagamento}
-                        dataKey="qtd"
-                        nameKey="forma"
-                        cx="50%"
-                        cy="50%"
-                        outerRadius={70}
-                        label={({ forma, percent }: any) => `${forma} ${((percent ?? 0) * 100).toFixed(0)}%`}
-                        labelLine={false}
-                      >
-                        {dados.porFormaPagamento.map((_, i) => (
-                          <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                      <DollarSign size={15} className="text-green-600" />
+                      Canal de Vendas
+                    </p>
+                    {dados.porFormaPagamento.length === 0 ? (
+                      <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Sem dados no período</div>
+                    ) : (
+                      <ResponsiveContainer width="100%" height={200}>
+                        <PieChart>
+                          <Pie data={dados.porFormaPagamento} dataKey="qtd" nameKey="forma" cx="50%" cy="50%" outerRadius={70}
+                            label={({ forma, percent }: any) => `${forma} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
+                            {dados.porFormaPagamento.map((_, i) => (
+                              <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />
+                            ))}
+                          </Pie>
+                          <Tooltip formatter={(v, name) => [v, name]} contentStyle={{ fontSize: 12 }} />
+                        </PieChart>
+                      </ResponsiveContainer>
+                    )}
+                    {dados.porFormaPagamento.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-3 justify-center">
+                        {dados.porFormaPagamento.map((f, i) => (
+                          <div key={f.forma} className="flex items-center gap-1.5">
+                            <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CORES_PIZZA[i % CORES_PIZZA.length] }} />
+                            <span className="text-xs text-gray-600">{f.forma} <span className="font-semibold">{f.qtd}</span></span>
+                          </div>
                         ))}
-                      </Pie>
-                      <Tooltip formatter={(v, name) => [v, name]} contentStyle={{ fontSize: 12 }} />
-                    </PieChart>
-                  </ResponsiveContainer>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {dados.porSemana.length > 1 && (
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                      <TrendingUp size={15} className="text-purple-600" />
+                      Comparativo Semanal
+                    </p>
+                    <ResponsiveContainer width="100%" height={200}>
+                      <BarChart data={dados.porSemana} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
+                        <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
+                        <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
+                        <Tooltip
+                          formatter={(value: any, name: any) =>
+                            name === 'qtd' ? [value, 'Vendas'] : [formatarMoeda(value), 'Faturamento']
+                          }
+                          labelStyle={{ fontSize: 12 }} contentStyle={{ fontSize: 12 }}
+                        />
+                        <Bar dataKey="qtd" fill="#1E40AF" radius={[3, 3, 0, 0]} name="qtd" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
                 )}
+
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {dados.porVendedor.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-4">
+                      <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <Users size={15} className="text-blue-600" />
+                        Ranking de Vendedores
+                      </p>
+                      <div className="space-y-2">
+                        {dados.porVendedor.map((v, i) => (
+                          <div key={v.nome} className="flex items-center gap-3">
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                              i === 0 ? 'bg-yellow-400 text-yellow-900' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-orange-300 text-orange-800' : 'bg-gray-100 text-gray-500'
+                            }`}>{i + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-gray-800 truncate">{v.nome}</p>
+                                <span className="text-sm font-bold text-gray-900 flex-shrink-0">{v.qtd}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(v.qtd / dados.porVendedor[0].qtd) * 100}%` }} />
+                                </div>
+                                <span className="text-[10px] text-gray-400 flex-shrink-0">{formatarMoeda(v.valor)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {dados.porBanco.length > 0 && (
+                    <div className="bg-white border border-gray-200 rounded-xl p-4">
+                      <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+                        <BarChart2 size={15} className="text-green-600" />
+                        Ranking de Bancos / Financeiras
+                      </p>
+                      <div className="space-y-2">
+                        {dados.porBanco.map((b, i) => (
+                          <div key={b.banco} className="flex items-center gap-3">
+                            <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
+                              i === 0 ? 'bg-yellow-400 text-yellow-900' : i === 1 ? 'bg-gray-300 text-gray-700' : i === 2 ? 'bg-orange-300 text-orange-800' : 'bg-gray-100 text-gray-500'
+                            }`}>{i + 1}</span>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center justify-between gap-2">
+                                <p className="text-sm font-medium text-gray-800 truncate">{b.banco}</p>
+                                <span className="text-sm font-bold text-gray-900 flex-shrink-0">{b.qtd}</span>
+                              </div>
+                              <div className="flex items-center gap-2 mt-0.5">
+                                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                                  <div className="h-full bg-green-500 rounded-full" style={{ width: `${(b.qtd / dados.porBanco[0].qtd) * 100}%` }} />
+                                </div>
+                                <span className="text-[10px] text-gray-400 flex-shrink-0">{formatarMoeda(b.valor)}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {dados.porFormaPagamento.length > 0 && (
-                  <div className="mt-3 flex flex-wrap gap-3 justify-center">
-                    {dados.porFormaPagamento.map((f, i) => (
-                      <div key={f.forma} className="flex items-center gap-1.5">
-                        <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CORES_PIZZA[i % CORES_PIZZA.length] }} />
-                        <span className="text-xs text-gray-600">{f.forma} <span className="font-semibold">{f.qtd}</span></span>
-                      </div>
-                    ))}
+                  <div className="bg-white border border-gray-200 rounded-xl p-4">
+                    <p className="text-sm font-semibold text-gray-700 mb-3">Detalhamento por Canal de Venda</p>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm">
+                        <thead>
+                          <tr className="border-b border-gray-100">
+                            <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Canal</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Qtd</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Participação</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor Total</th>
+                            <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ticket Médio</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {dados.porFormaPagamento.map((f) => (
+                            <tr key={f.forma} className="border-b border-gray-50 hover:bg-gray-50">
+                              <td className="py-2 px-3 font-medium text-gray-800">{f.forma}</td>
+                              <td className="py-2 px-3 text-right text-gray-700">{f.qtd}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">
+                                {dados.totalVendas > 0 ? `${((f.qtd / dados.totalVendas) * 100).toFixed(1)}%` : '—'}
+                              </td>
+                              <td className="py-2 px-3 text-right text-gray-700">{formatarMoeda(f.valor)}</td>
+                              <td className="py-2 px-3 text-right text-gray-500">
+                                {f.qtd > 0 ? formatarMoeda(f.valor / f.qtd) : '—'}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
                   </div>
                 )}
-              </div>
-            </div>
 
-            {/* Comparativo semanal */}
-            {semanasLegenda.length > 1 && (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
-                  <TrendingUp size={15} className="text-purple-600" />
-                  Comparativo Semanal
-                </p>
-                <ResponsiveContainer width="100%" height={200}>
-                  <BarChart data={semanasLegenda} margin={{ top: 0, right: 0, left: -20, bottom: 0 }}>
-                    <XAxis dataKey="semana" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} allowDecimals={false} />
-                    <Tooltip
-                      formatter={(value: any, name: any) =>
-                        name === 'qtd' ? [value, 'Vendas'] : [formatarMoeda(value), 'Faturamento']
-                      }
-                      labelStyle={{ fontSize: 12 }}
-                      contentStyle={{ fontSize: 12 }}
-                    />
-                    <Bar dataKey="qtd" fill="#1E40AF" radius={[3, 3, 0, 0]} name="qtd" />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
+                {dados.totalVendas === 0 && (
+                  <div className="flex flex-col items-center justify-center h-48 text-center">
+                    <BarChart2 size={36} className="text-gray-300 mb-3" />
+                    <p className="text-gray-500 font-medium">Nenhuma venda no período</p>
+                    <p className="text-gray-400 text-sm mt-1">Ajuste os filtros para ver os dados</p>
+                  </div>
+                )}
+              </>
             )}
+          </>
+        )}
 
-            {/* Rankings lado a lado */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              {/* Ranking de vendedores */}
-              {dados.porVendedor.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <Users size={15} className="text-blue-600" />
-                    Ranking de Vendedores
-                  </p>
-                  <div className="space-y-2">
-                    {dados.porVendedor.map((v, i) => (
-                      <div key={v.nome} className="flex items-center gap-3">
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                          i === 0 ? 'bg-yellow-400 text-yellow-900' :
-                          i === 1 ? 'bg-gray-300 text-gray-700' :
-                          i === 2 ? 'bg-orange-300 text-orange-800' :
-                          'bg-gray-100 text-gray-500'
-                        }`}>{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium text-gray-800 truncate">{v.nome}</p>
-                            <span className="text-sm font-bold text-gray-900 flex-shrink-0">{v.qtd}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-blue-500 rounded-full"
-                                style={{ width: `${(v.qtd / dados.porVendedor[0].qtd) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">{formatarMoeda(v.valor)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
+        {/* ── ABA: LISTA DE VENDAS ── */}
+        {aba === 'lista' && (
+          <>
+            {carregandoLista && <p className="text-gray-400 text-sm">Carregando...</p>}
+            {!carregandoLista && (
+              <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
+                {vendas.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-48 text-center">
+                    <ShoppingBag size={36} className="text-gray-300 mb-3" />
+                    <p className="text-gray-500 font-medium">Nenhuma venda no período</p>
                   </div>
-                </div>
-              )}
-
-              {/* Ranking de bancos/financeiras */}
-              {dados.porBanco.length > 0 && (
-                <div className="bg-white border border-gray-200 rounded-xl p-4">
-                  <p className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-                    <BarChart2 size={15} className="text-green-600" />
-                    Ranking de Bancos / Financeiras
-                  </p>
-                  <div className="space-y-2">
-                    {dados.porBanco.map((b, i) => (
-                      <div key={b.banco} className="flex items-center gap-3">
-                        <span className={`w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold flex-shrink-0 ${
-                          i === 0 ? 'bg-yellow-400 text-yellow-900' :
-                          i === 1 ? 'bg-gray-300 text-gray-700' :
-                          i === 2 ? 'bg-orange-300 text-orange-800' :
-                          'bg-gray-100 text-gray-500'
-                        }`}>{i + 1}</span>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center justify-between gap-2">
-                            <p className="text-sm font-medium text-gray-800 truncate">{b.banco}</p>
-                            <span className="text-sm font-bold text-gray-900 flex-shrink-0">{b.qtd}</span>
-                          </div>
-                          <div className="flex items-center gap-2 mt-0.5">
-                            <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
-                              <div
-                                className="h-full bg-green-500 rounded-full"
-                                style={{ width: `${(b.qtd / dados.porBanco[0].qtd) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-[10px] text-gray-400 flex-shrink-0">{formatarMoeda(b.valor)}</span>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Tabela detalhada por forma de pagamento */}
-            {dados.porFormaPagamento.length > 0 && (
-              <div className="bg-white border border-gray-200 rounded-xl p-4">
-                <p className="text-sm font-semibold text-gray-700 mb-3">Detalhamento por Canal de Venda</p>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b border-gray-100">
-                        <th className="text-left py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Canal</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Qtd</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Participação</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor Total</th>
-                        <th className="text-right py-2 px-3 text-xs font-semibold text-gray-500 uppercase tracking-wide">Ticket Médio</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {dados.porFormaPagamento.map((f) => (
-                        <tr key={f.forma} className="border-b border-gray-50 hover:bg-gray-50">
-                          <td className="py-2 px-3 font-medium text-gray-800">{f.forma}</td>
-                          <td className="py-2 px-3 text-right text-gray-700">{f.qtd}</td>
-                          <td className="py-2 px-3 text-right text-gray-500">
-                            {dados.totalVendas > 0 ? `${((f.qtd / dados.totalVendas) * 100).toFixed(1)}%` : '—'}
-                          </td>
-                          <td className="py-2 px-3 text-right text-gray-700">{formatarMoeda(f.valor)}</td>
-                          <td className="py-2 px-3 text-right text-gray-500">
-                            {f.qtd > 0 ? formatarMoeda(f.valor / f.qtd) : '—'}
-                          </td>
+                ) : (
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-sm">
+                      <thead>
+                        <tr className="border-b border-gray-100 bg-gray-50">
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Veículo</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Comprador</th>
+                          <th className="text-right py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
+                          <th className="text-center py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
+                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Data</th>
+                          <th className="py-2.5 px-4"></th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            )}
-
-            {dados.totalVendas === 0 && (
-              <div className="flex flex-col items-center justify-center h-48 text-center">
-                <BarChart2 size={36} className="text-gray-300 mb-3" />
-                <p className="text-gray-500 font-medium">Nenhuma venda no período</p>
-                <p className="text-gray-400 text-sm mt-1">Ajuste os filtros para ver os dados</p>
+                      </thead>
+                      <tbody className="divide-y divide-gray-50">
+                        {vendas.map((v) => (
+                          <tr key={v.id} className={`hover:bg-gray-50 transition-colors ${v.status === 'cancelada' ? 'opacity-60' : ''}`}>
+                            <td className="py-3 px-4">
+                              <p className="font-medium text-gray-900">{v.marca} {v.modelo}</p>
+                              <p className="text-xs text-gray-400">{v.placa} · {v.ano_modelo}</p>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="text-gray-800 truncate max-w-[160px]">{v.comprador_nome}</p>
+                              <p className="text-xs text-gray-400">{v.comprador_cpf_cnpj}</p>
+                            </td>
+                            <td className="py-3 px-4 text-right">
+                              <span className="font-semibold text-gray-900">{formatarMoeda(v.valor_venda)}</span>
+                            </td>
+                            <td className="py-3 px-4 text-center">
+                              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${STATUS_COR[v.status] ?? 'bg-gray-100 text-gray-600'}`}>
+                                {STATUS_LABEL[v.status] ?? v.status}
+                              </span>
+                            </td>
+                            <td className="py-3 px-4 text-gray-500 text-xs whitespace-nowrap">
+                              {format(parseISO(v.criado_em), "dd/MM/yyyy", { locale: ptBR })}
+                            </td>
+                            <td className="py-3 px-4">
+                              <div className="flex items-center justify-end gap-1">
+                                {v.status !== 'cancelada' && (
+                                  <button
+                                    onClick={() => setAcaoConfirm({ tipo: 'cancelar', venda: v })}
+                                    title="Cancelar venda"
+                                    className="p-1.5 rounded-lg text-amber-500 hover:bg-amber-50 hover:text-amber-700 transition-colors"
+                                  >
+                                    <Ban size={15} />
+                                  </button>
+                                )}
+                                <button
+                                  onClick={() => setAcaoConfirm({ tipo: 'excluir', venda: v })}
+                                  title="Excluir venda"
+                                  className="p-1.5 rounded-lg text-red-400 hover:bg-red-50 hover:text-red-600 transition-colors"
+                                >
+                                  <Trash2 size={15} />
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
               </div>
             )}
           </>
         )}
       </div>
+
+      {/* ── Dialog de confirmação ── */}
+      <Dialog open={!!acaoConfirm} onOpenChange={(v) => { if (!v) { setAcaoConfirm(null); setErroAcao(null) } }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle size={18} className={acaoConfirm?.tipo === 'excluir' ? 'text-red-500' : 'text-amber-500'} />
+              {acaoConfirm?.tipo === 'excluir' ? 'Excluir venda' : 'Cancelar venda'}
+            </DialogTitle>
+          </DialogHeader>
+          {acaoConfirm && (
+            <div className="space-y-4 pt-1">
+              <div className="bg-gray-50 rounded-lg px-3 py-2 text-sm">
+                <p className="font-medium text-gray-800">{acaoConfirm.venda.marca} {acaoConfirm.venda.modelo} — {acaoConfirm.venda.placa}</p>
+                <p className="text-gray-500 text-xs mt-0.5">{acaoConfirm.venda.comprador_nome} · {formatarMoeda(acaoConfirm.venda.valor_venda)}</p>
+              </div>
+
+              {acaoConfirm.tipo === 'excluir' ? (
+                <p className="text-sm text-gray-600">
+                  A venda e <strong>todos os dados vinculados</strong> (atividades, pendências, transferência) serão removidos permanentemente.
+                </p>
+              ) : (
+                <p className="text-sm text-gray-600">
+                  A venda será marcada como <strong>Cancelada</strong>. O histórico será mantido.
+                </p>
+              )}
+
+              {erroAcao && (
+                <p className="text-xs text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{erroAcao}</p>
+              )}
+
+              <div className="flex gap-2">
+                <Button
+                  onClick={confirmarAcao}
+                  disabled={executando}
+                  variant={acaoConfirm.tipo === 'excluir' ? 'destructive' : 'default'}
+                  className={acaoConfirm.tipo === 'cancelar' ? 'bg-amber-500 hover:bg-amber-600' : ''}
+                >
+                  {executando
+                    ? 'Aguarde...'
+                    : acaoConfirm.tipo === 'excluir'
+                      ? 'Excluir permanentemente'
+                      : 'Confirmar cancelamento'
+                  }
+                </Button>
+                <Button variant="outline" onClick={() => { setAcaoConfirm(null); setErroAcao(null) }}>
+                  Voltar
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

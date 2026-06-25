@@ -144,6 +144,34 @@ export async function criarVenda(dados: DadosNovaVenda, vendedorId: string, id?:
   return saleId
 }
 
+export async function listarTodasVendas(filtros: FiltrosVendas = {}): Promise<VendaListagem[]> {
+  let query = supabase
+    .from('sales')
+    .select('*, seller_pendencies(*), sector_activities(*)')
+    .order('criado_em', { ascending: false })
+
+  if (filtros.status) query = query.eq('status', filtros.status)
+  if (filtros.de)     query = query.gte('criado_em', filtros.de)
+  if (filtros.ate)    query = query.lte('criado_em', filtros.ate + 'T23:59:59')
+
+  const { data, error } = await query
+  if (error) throw error
+  return (data ?? []) as VendaListagem[]
+}
+
+export async function cancelarVenda(vendaId: string): Promise<void> {
+  const { error } = await supabase
+    .from('sales')
+    .update({ status: 'cancelada' })
+    .eq('id', vendaId)
+  if (error) throw error
+}
+
+export async function excluirVenda(vendaId: string): Promise<void> {
+  const { error } = await supabase.rpc('excluir_venda', { p_sale_id: vendaId })
+  if (error) throw error
+}
+
 export async function marcarPendenciaConcluida(pendenciaId: string): Promise<void> {
   const { error } = await supabase
     .from('seller_pendencies')

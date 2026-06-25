@@ -12,6 +12,18 @@ export interface EventoCalendario {
   venda?: string           // "Marca Modelo" para exibição
 }
 
+export async function excluirEventoPendencia(id: string, tipo: EventoCalendario['tipo']): Promise<void> {
+  let error: unknown
+  if (tipo === 'atividade_setor') {
+    ({ error } = await supabase.from('sector_activities').delete().eq('id', id))
+  } else if (tipo === 'pendencia_vendedor') {
+    ({ error } = await supabase.from('seller_pendencies').delete().eq('id', id))
+  } else {
+    ({ error } = await supabase.from('tarefas').delete().eq('id', id))
+  }
+  if (error) throw error
+}
+
 export async function listarEventosCalendario(): Promise<EventoCalendario[]> {
   const [atividadesRes, pendenciasRes, tarefasRes] = await Promise.all([
     supabase

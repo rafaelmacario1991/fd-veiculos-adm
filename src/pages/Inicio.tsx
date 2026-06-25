@@ -5,9 +5,9 @@ import {
 } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import {
-  CalendarClock, Plus, CheckCircle2, Clock, AlertTriangle, Circle,
+  CalendarClock, Plus, CheckCircle2, Clock, AlertTriangle, Circle, Trash2,
 } from 'lucide-react'
-import { listarEventosCalendario, type EventoCalendario } from '@/services/inicio'
+import { listarEventosCalendario, excluirEventoPendencia, type EventoCalendario } from '@/services/inicio'
 import { listarTarefas, concluirTarefa, reabrirTarefa } from '@/services/tarefas'
 import { useAuthStore } from '@/store/authStore'
 import CalendarioAtividades from '@/components/ui/CalendarioAtividades'
@@ -51,7 +51,8 @@ function estaAtivo(ev: EventoCalendario) {
 // ============================================================
 
 export default function Inicio() {
-  const { usuario } = useAuthStore()
+  const { usuario, temPerfil } = useAuthStore()
+  const ehSupervisor = temPerfil('supervisor')
   const [eventos,   setEventos]   = useState<EventoCalendario[]>([])
   const [tarefas,   setTarefas]   = useState<Tarefa[]>([])
   const [carregando, setCarregando] = useState(true)
@@ -101,6 +102,14 @@ export default function Inicio() {
   const listaExibida: EventoCalendario[] = diaSelecionado
     ? eventosDia
     : ativos.slice(0, 20)
+
+  async function excluirPendencia(ev: EventoCalendario) {
+    if (!confirm(`Excluir "${ev.titulo}"?`)) return
+    try {
+      await excluirEventoPendencia(ev.id, ev.tipo)
+      carregar()
+    } catch { /* silent */ }
+  }
 
   async function toggleTarefa(tarefa: Tarefa) {
     if (!usuario) return
@@ -261,7 +270,7 @@ export default function Inicio() {
               return (
                 <div
                   key={ev.id}
-                  className={`flex items-center gap-3 px-4 md:px-5 py-3 ${ativo ? '' : 'opacity-50'}`}
+                  className={`flex items-center gap-3 px-4 md:px-5 py-3 group ${ativo ? '' : 'opacity-50'}`}
                 >
                   {/* Indicador de status */}
                   <div className={`w-2 h-2 rounded-full flex-shrink-0 ${
@@ -287,6 +296,16 @@ export default function Inicio() {
 
                   {ev.venda && (
                     <span className="text-xs text-gray-400 hidden md:block flex-shrink-0">{ev.venda}</span>
+                  )}
+
+                  {ehSupervisor && (
+                    <button
+                      onClick={() => excluirPendencia(ev)}
+                      title="Excluir pendência"
+                      className="p-1.5 rounded-lg text-gray-300 hover:text-red-500 hover:bg-red-50 transition-colors opacity-0 group-hover:opacity-100"
+                    >
+                      <Trash2 size={14} />
+                    </button>
                   )}
                 </div>
               )

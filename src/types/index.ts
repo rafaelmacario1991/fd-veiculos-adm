@@ -10,7 +10,7 @@ export type Perfil =
   | 'transferencia'
   | 'supervisor'
 
-export type StatusVenda = 'iniciada' | 'pendencia_vendedor' | 'concluida'
+export type StatusVenda = 'iniciada' | 'pendencia_vendedor' | 'concluida' | 'cancelada'
 
 export type FormaPagamento = string
 
