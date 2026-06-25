@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useRequererPerfil } from '@/hooks/useAuth'
@@ -21,7 +21,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, ShoppingBag, DollarSign, BarChart2, Users,
-  List, Trash2, Ban, AlertTriangle,
+  List, Trash2, Ban, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -60,6 +60,8 @@ const STATUS_COR: Record<string, string> = {
 
 type Aba = 'analise' | 'lista'
 type AcaoConfirm = { tipo: 'cancelar' | 'excluir'; venda: VendaListagem } | null
+type ColunaOrdem = 'veiculo' | 'comprador' | 'vendedor' | 'valor' | 'status' | 'data'
+type Direcao = 'asc' | 'desc'
 
 export default function QuadroVendas() {
   useRequererPerfil(['supervisor'])
@@ -82,6 +84,8 @@ export default function QuadroVendas() {
   const [acaoConfirm, setAcaoConfirm] = useState<AcaoConfirm>(null)
   const [executando, setExecutando]   = useState(false)
   const [erroAcao, setErroAcao]       = useState<string | null>(null)
+  const [ordemColuna, setOrdemColuna] = useState<ColunaOrdem>('data')
+  const [ordemDir, setOrdemDir]       = useState<Direcao>('desc')
 
   useEffect(() => {
     listarVendedores().then(setVendedores)
@@ -109,6 +113,34 @@ export default function QuadroVendas() {
     ...d,
     diaLabel: d.dia.slice(5).replace('-', '/'),
   }))
+
+  function toggleOrdem(col: ColunaOrdem) {
+    if (ordemColuna === col) {
+      setOrdemDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+    } else {
+      setOrdemColuna(col)
+      setOrdemDir('asc')
+    }
+  }
+
+  const vendasOrdenadas = useMemo(() => {
+    const cmp = (a: VendaListagem, b: VendaListagem): number => {
+      let va: string | number = ''
+      let vb: string | number = ''
+      switch (ordemColuna) {
+        case 'veiculo':   va = `${a.marca} ${a.modelo}`; vb = `${b.marca} ${b.modelo}`; break
+        case 'comprador': va = a.comprador_nome;          vb = b.comprador_nome;          break
+        case 'vendedor':  va = a.users?.nome ?? '';       vb = b.users?.nome ?? '';       break
+        case 'valor':     va = a.valor_venda;             vb = b.valor_venda;             break
+        case 'status':    va = a.status;                  vb = b.status;                  break
+        case 'data':      va = a.criado_em;               vb = b.criado_em;               break
+      }
+      if (va < vb) return ordemDir === 'asc' ? -1 : 1
+      if (va > vb) return ordemDir === 'asc' ? 1 : -1
+      return 0
+    }
+    return [...vendas].sort(cmp)
+  }, [vendas, ordemColuna, ordemDir])
 
   async function confirmarAcao() {
     if (!acaoConfirm) return
@@ -407,16 +439,35 @@ export default function QuadroVendas() {
                     <table className="w-full text-sm">
                       <thead>
                         <tr className="border-b border-gray-100 bg-gray-50">
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Veículo</th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Comprador</th>
-                          <th className="text-right py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Valor</th>
-                          <th className="text-center py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Status</th>
-                          <th className="text-left py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide">Data</th>
+                          {([
+                            { col: 'veiculo',   label: 'Veículo',   align: 'left'   },
+                            { col: 'comprador', label: 'Comprador', align: 'left'   },
+                            { col: 'vendedor',  label: 'Vendedor',  align: 'left'   },
+                            { col: 'valor',     label: 'Valor',     align: 'right'  },
+                            { col: 'status',    label: 'Status',    align: 'center' },
+                            { col: 'data',      label: 'Data',      align: 'left'   },
+                          ] as { col: ColunaOrdem; label: string; align: string }[]).map(({ col, label, align }) => (
+                            <th
+                              key={col}
+                              onClick={() => toggleOrdem(col)}
+                              className={`py-2.5 px-4 text-xs font-semibold text-gray-500 uppercase tracking-wide cursor-pointer select-none hover:bg-gray-100 transition-colors text-${align}`}
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                {label}
+                                {ordemColuna === col
+                                  ? ordemDir === 'asc'
+                                    ? <ChevronUp size={12} className="text-blue-600" />
+                                    : <ChevronDown size={12} className="text-blue-600" />
+                                  : <ChevronsUpDown size={12} className="text-gray-300" />
+                                }
+                              </span>
+                            </th>
+                          ))}
                           <th className="py-2.5 px-4"></th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {vendas.map((v) => (
+                        {vendasOrdenadas.map((v) => (
                           <tr key={v.id} className={`hover:bg-gray-50 transition-colors ${v.status === 'cancelada' ? 'opacity-60' : ''}`}>
                             <td className="py-3 px-4">
                               <p className="font-medium text-gray-900">{v.marca} {v.modelo}</p>
@@ -425,6 +476,9 @@ export default function QuadroVendas() {
                             <td className="py-3 px-4">
                               <p className="text-gray-800 truncate max-w-[160px]">{v.comprador_nome}</p>
                               <p className="text-xs text-gray-400">{v.comprador_cpf_cnpj}</p>
+                            </td>
+                            <td className="py-3 px-4">
+                              <p className="text-gray-800">{v.users?.nome ?? '—'}</p>
                             </td>
                             <td className="py-3 px-4 text-right">
                               <span className="font-semibold text-gray-900">{formatarMoeda(v.valor_venda)}</span>

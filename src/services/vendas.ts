@@ -46,6 +46,8 @@ export interface VendaListagem {
   atualizado_em: string
   seller_pendencies: PendenciaVendedor[]
   sector_activities: AtividadeSetor[]
+  // Join
+  users: { nome: string } | null
 }
 
 export interface DadosNovaVenda {
@@ -147,7 +149,7 @@ export async function criarVenda(dados: DadosNovaVenda, vendedorId: string, id?:
 export async function listarTodasVendas(filtros: FiltrosVendas = {}): Promise<VendaListagem[]> {
   let query = supabase
     .from('sales')
-    .select('*, seller_pendencies(*), sector_activities(*)')
+    .select('*, seller_pendencies(*), sector_activities(*), users!vendedor_id(nome)')
     .order('criado_em', { ascending: false })
 
   if (filtros.status) query = query.eq('status', filtros.status)
