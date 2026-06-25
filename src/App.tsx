@@ -7,6 +7,7 @@ import NovaSenha from '@/pages/NovaSenha'
 import Dashboard from '@/pages/Dashboard'
 import PainelVendedor from '@/pages/vendedor/PainelVendedor'
 import NovaVenda from '@/pages/vendedor/NovaVenda'
+import MinhasComissoes from '@/pages/vendedor/MinhasComissoes'
 import PainelContratos from '@/pages/setores/PainelContratos'
 import PainelFinanceiro from '@/pages/setores/PainelFinanceiro'
 import PainelFiscal from '@/pages/setores/PainelFiscal'
@@ -49,6 +50,7 @@ function App() {
           {/* Vendedor */}
           <Route path="/vendedor" element={<PainelVendedor />} />
           <Route path="/vendedor/nova-venda" element={<NovaVenda />} />
+          <Route path="/vendedor/comissoes" element={<MinhasComissoes />} />
 
           {/* Setores */}
           <Route path="/setor/contratos" element={<PainelContratos />} />

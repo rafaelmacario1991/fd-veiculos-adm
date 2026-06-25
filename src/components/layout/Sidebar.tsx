@@ -5,7 +5,7 @@ import { supabase } from '@/services/supabase'
 import {
   Car, FileText, DollarSign, Receipt, Truck, Users, UserCog,
   LogOut, LayoutDashboard, PlusCircle, ShieldCheck, BarChart2,
-  ChevronUp, Settings, X, Sun, Moon, House,
+  ChevronUp, Settings, X, Sun, Moon, House, Wallet,
 } from 'lucide-react'
 import ModalPerfil from './ModalPerfil'
 import fdLogo from '@/assets/fd-logo.png'
@@ -63,6 +63,7 @@ export default function Sidebar({ onNavegar, tema, onAlternarTema }: SidebarProp
   const itensVendedor: ItemNav[] = [
     { label: 'Nova Venda', href: '/vendedor/nova-venda', icone: <PlusCircle size={16} /> },
     { label: 'Minhas Vendas', href: '/vendedor', icone: <Car size={16} /> },
+    { label: 'Minhas Comissões', href: '/vendedor/comissoes', icone: <Wallet size={16} /> },
     ...(perfis.includes('supervisor')
       ? [{ label: 'Quadro de Vendas', href: '/supervisor/quadro-vendas', icone: <BarChart2 size={16} /> }]
       : []),
