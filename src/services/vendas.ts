@@ -41,6 +41,8 @@ export interface VendaListagem {
   valor_financiado: number | null
   numero_parcelas: number | null
   observacoes: string | null
+  transferencia_info: string | null
+  ipva_info: string | null
   // Metadados
   criado_em: string
   atualizado_em: string
@@ -78,6 +80,8 @@ export interface DadosNovaVenda {
   forma_pagamento: FormaPagamento
   formas_pagamento_json: MetodoPagamentoItem[]
   observacoes?: string
+  transferencia_info?: string
+  ipva_info?: string
 }
 
 export interface FiltrosVendas {

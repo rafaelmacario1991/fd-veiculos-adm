@@ -392,6 +392,11 @@ export default function NovaVenda() {
     }
   }
 
+  // Transferência e IPVA
+  const [tipoTransferencia, setTipoTransferencia] = useState<'cortesia' | 'cobrada' | null>(null)
+  const [valorTransferencia, setValorTransferencia] = useState('')
+  const [ipvaInfo, setIpvaInfo] = useState('')
+
   // Veículo de entrada
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
   const [dadosEntrada, setDadosEntrada] = useState<Partial<DadosEntradaVeiculo>>({})
@@ -476,6 +481,11 @@ export default function NovaVenda() {
     setErroGlobal(null)
 
     try {
+      const transferenciaInfo =
+        tipoTransferencia === 'cortesia' ? 'Cortesia' :
+        tipoTransferencia === 'cobrada' && valorTransferencia ? valorTransferencia :
+        undefined
+
       await criarVenda(
         {
           ...dados,
@@ -487,6 +497,8 @@ export default function NovaVenda() {
           forma_pagamento:          formaPagamentoResumo,
           formas_pagamento_json:    formasPagamentoJson,
           observacoes:              dados.observacoes || undefined,
+          transferencia_info:       transferenciaInfo,
+          ipva_info:                ipvaInfo || undefined,
         },
         usuario.id,
         saleId
@@ -719,6 +731,63 @@ export default function NovaVenda() {
               {erroMetodos}
             </div>
           )}
+        </div>
+
+        {/* Transferência e IPVA */}
+        <div className="bg-white border border-gray-200 rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-gray-900 mb-4 pb-3 border-b border-gray-100">
+            Transferência e IPVA
+          </h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+
+            {/* Transferência */}
+            <div>
+              <Label className="text-xs font-medium text-gray-700 mb-2 block">Transferência</Label>
+              <div className="flex gap-2">
+                {(['cortesia', 'cobrada'] as const).map((v) => (
+                  <button
+                    key={v}
+                    type="button"
+                    onClick={() => {
+                      setTipoTransferencia(tipoTransferencia === v ? null : v)
+                      setValorTransferencia('')
+                    }}
+                    className={`flex-1 py-2 rounded-lg border text-sm font-medium transition-colors ${
+                      tipoTransferencia === v
+                        ? 'bg-[#1E40AF] border-[#1E40AF] text-white'
+                        : 'border-gray-200 text-gray-600 hover:border-gray-300'
+                    }`}
+                  >
+                    {v === 'cortesia' ? 'Cortesia' : 'Cobrada'}
+                  </button>
+                ))}
+              </div>
+              {tipoTransferencia === 'cobrada' && (
+                <div className="mt-2">
+                  <Label className="text-xs font-medium text-gray-600 mb-1 block">Valor cobrado (R$)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    placeholder="0,00"
+                    value={valorTransferencia}
+                    onChange={(e) => setValorTransferencia(e.target.value)}
+                  />
+                </div>
+              )}
+            </div>
+
+            {/* IPVA */}
+            <div>
+              <Label className="text-xs font-medium text-gray-700 mb-2 block">IPVA</Label>
+              <Input
+                placeholder="Ex: incluso total, parcial 6/12, em aberto..."
+                value={ipvaInfo}
+                onChange={(e) => setIpvaInfo(e.target.value)}
+                maxLength={120}
+              />
+            </div>
+
+          </div>
         </div>
 
         {/* Veículo de Entrada */}

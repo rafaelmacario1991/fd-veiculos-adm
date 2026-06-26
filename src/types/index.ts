@@ -84,6 +84,8 @@ export interface Venda {
   valor_financiado?: number
   numero_parcelas?: number
   observacoes?: string
+  transferencia_info?: string
+  ipva_info?: string
   // Metadados
   criado_em: string
   atualizado_em: string
