@@ -3,17 +3,24 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import type { VendaListagem } from '@/services/vendas'
 import { listarAnexos, type AnexoVenda } from '@/services/anexos'
 import { buscarEntradaVeiculo, listarDocumentosEntrada, type EntradaVeiculo, type DocumentoEntrada } from '@/services/entradaVeiculo'
-import { Car, User, DollarSign, FileText, Camera, ArrowLeftRight, FileCheck } from 'lucide-react'
+import { Car, User, DollarSign, FileText, Camera, ArrowLeftRight, FileCheck, BadgeInfo } from 'lucide-react'
 
 interface Props {
   venda: VendaListagem | null
   onFechar: () => void
 }
 
-const formaPagamentoLabel: Record<string, string> = {
-  a_vista: 'À Vista',
+const METODO_LABEL: Record<string, string> = {
+  dinheiro: 'Dinheiro',
+  pix: 'PIX',
   cartao: 'Cartão',
   financiamento: 'Financiamento',
+  promissoria: 'Promissória',
+}
+
+function formatarData(d: string): string {
+  const [ano, mes, dia] = d.split('-')
+  return `${dia}/${mes}/${ano}`
 }
 
 function Linha({ label, valor }: { label: string; valor?: string | number | null }) {
@@ -35,7 +42,7 @@ function Secao({ icone, titulo, children }: { icone: React.ReactNode; titulo: st
         </div>
         <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{titulo}</p>
       </div>
-      <div className="grid grid-cols-2 gap-x-6 gap-y-3 pl-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3 pl-8">
         {children}
       </div>
     </div>
@@ -128,17 +135,61 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
 
           {/* Negociação */}
           <Secao icone={<DollarSign size={13} />} titulo="Negociação">
-            <Linha label="Valor da Venda" valor={moeda(venda.valor_venda)} />
-            <Linha label="Forma de Pagamento" valor={formaPagamentoLabel[venda.forma_pagamento] ?? venda.forma_pagamento} />
-            {venda.forma_pagamento === 'financiamento' && (
-              <>
-                <Linha label="Banco / Financeira" valor={venda.banco_financeira} />
-                <Linha label="Valor Entrada" valor={moeda(venda.valor_entrada)} />
-                <Linha label="Valor Financiado" valor={moeda(venda.valor_financiado)} />
-                <Linha label="Parcelas" valor={venda.numero_parcelas ? `${venda.numero_parcelas}x` : null} />
-              </>
+            <div className="col-span-2">
+              <Linha label="Valor da Venda" valor={moeda(venda.valor_venda)} />
+            </div>
+
+            {/* Formas de pagamento (novo formato JSON) */}
+            {venda.formas_pagamento_json && venda.formas_pagamento_json.length > 0 ? (
+              <div className="col-span-2 space-y-2 mt-1">
+                <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide">
+                  Forma{venda.formas_pagamento_json.length > 1 ? 's' : ''} de Pagamento
+                </span>
+                {venda.formas_pagamento_json.map((m, i) => (
+                  <div key={i} className="bg-gray-50 border border-gray-100 rounded-lg p-3">
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs font-semibold text-gray-700">
+                        {METODO_LABEL[m.tipo] ?? m.tipo}
+                      </span>
+                      <span className="text-sm font-bold text-gray-800">{moeda(m.valor)}</span>
+                    </div>
+                    <div className="space-y-0.5">
+                      {m.data && (
+                        <p className="text-xs text-gray-500">Data: {formatarData(m.data)}</p>
+                      )}
+                      {m.banco && (
+                        <p className="text-xs text-gray-500">Banco / Financeira: <strong>{m.banco}</strong></p>
+                      )}
+                      {m.numero_parcelas != null && (
+                        <p className="text-xs text-gray-500">
+                          Parcelas: <strong>{m.numero_parcelas}x</strong>
+                          {m.valor_parcela ? ` de ${moeda(m.valor_parcela)}` : ''}
+                        </p>
+                      )}
+                      {m.data_primeiro_pagamento && (
+                        <p className="text-xs text-gray-500">
+                          1ª parcela: {formatarData(m.data_primeiro_pagamento)}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <Linha label="Forma de Pagamento" valor={venda.forma_pagamento} />
             )}
           </Secao>
+
+          {/* Transferência e IPVA */}
+          {(venda.transferencia_info || venda.ipva_info) && (
+            <>
+              <hr className="border-gray-100" />
+              <Secao icone={<BadgeInfo size={13} />} titulo="Transferência e IPVA">
+                <Linha label="Transferência" valor={venda.transferencia_info} />
+                <Linha label="IPVA" valor={venda.ipva_info} />
+              </Secao>
+            </>
+          )}
 
           {/* Observações */}
           {venda.observacoes && (
@@ -166,7 +217,29 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
                 <Linha label="RENAVAM" valor={entrada.renavam} />
                 <Linha label="Chassi" valor={entrada.chassi} />
                 <Linha label="Quilometragem" valor={entrada.quilometragem ? `${entrada.quilometragem.toLocaleString('pt-BR')} km` : null} />
-                <Linha label="Valor Estimado" valor={entrada.valor_estimado ? entrada.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null} />
+                <Linha label="Valor Estimado (bruto)" valor={entrada.valor_estimado ? entrada.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null} />
+
+                {entrada.debitos && entrada.debitos.length > 0 && (
+                  <div className="col-span-2">
+                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide block mb-1.5">Débitos do Veículo</span>
+                    <div className="space-y-1">
+                      {entrada.debitos.map((d, i) => (
+                        <div key={i} className="flex justify-between text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2.5 py-1.5">
+                          <span>{d.descricao || '—'}</span>
+                          <span className="font-medium">− {d.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                        </div>
+                      ))}
+                      <div className="flex justify-between text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5">
+                        <span>Entrada líquida</span>
+                        <span>
+                          {((entrada.valor_estimado ?? 0) - entrada.debitos.reduce((acc, d) => acc + d.valor, 0))
+                            .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
                 <Linha label="Proprietário" valor={entrada.proprietario_nome} />
                 {entrada.observacoes && (
                   <div className="col-span-2">

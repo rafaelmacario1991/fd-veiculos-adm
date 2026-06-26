@@ -1,5 +1,10 @@
 import { supabase } from './supabase'
 
+export interface DebitoEntrada {
+  descricao: string
+  valor: number
+}
+
 export interface DadosEntradaVeiculo {
   marca: string
   modelo: string
@@ -14,6 +19,7 @@ export interface DadosEntradaVeiculo {
   valor_estimado?: number
   proprietario_nome?: string
   observacoes?: string
+  debitos?: DebitoEntrada[]
 }
 
 export interface EntradaVeiculo extends DadosEntradaVeiculo {
@@ -36,11 +42,13 @@ export async function salvarEntradaVeiculo(
   saleId: string,
   dados: DadosEntradaVeiculo
 ): Promise<void> {
-  // Upsert — se já existir, atualiza
+  const { debitos, ...resto } = dados
   const { error } = await supabase
     .from('trade_in_vehicles')
-    .upsert({ sale_id: saleId, ...dados }, { onConflict: 'sale_id' })
-
+    .upsert(
+      { sale_id: saleId, ...resto, debitos_json: debitos ?? [] },
+      { onConflict: 'sale_id' }
+    )
   if (error) throw error
 }
 
@@ -52,7 +60,11 @@ export async function buscarEntradaVeiculo(saleId: string): Promise<EntradaVeicu
     .maybeSingle()
 
   if (error) throw error
-  return data as EntradaVeiculo | null
+  if (!data) return null
+
+  const raw = data as Record<string, unknown>
+  const { debitos_json, ...resto } = raw
+  return { ...resto, debitos: (debitos_json ?? []) as DebitoEntrada[] } as EntradaVeiculo
 }
 
 export async function listarDocumentosEntrada(saleId: string): Promise<DocumentoEntrada[]> {

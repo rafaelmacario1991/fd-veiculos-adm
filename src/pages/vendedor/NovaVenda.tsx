@@ -29,6 +29,7 @@ import {
   salvarEntradaVeiculo,
   type DadosEntradaVeiculo,
   type DocumentoEntrada,
+  type DebitoEntrada,
 } from '@/services/entradaVeiculo'
 import { Camera, Car, AlertCircle, Plus, X, Loader2 } from 'lucide-react'
 
@@ -416,6 +417,9 @@ export default function NovaVenda() {
   const [dadosEntrada, setDadosEntrada] = useState<Partial<DadosEntradaVeiculo>>({})
   const [documentosEntrada, setDocumentosEntrada] = useState<DocumentoEntrada[]>([])
 
+  interface LinhaDebito { id: string; descricao: string; valor: string }
+  const [debitosEntrada, setDebitosEntrada] = useState<LinhaDebito[]>([])
+
   const {
     register,
     handleSubmit,
@@ -449,13 +453,14 @@ export default function NovaVenda() {
       return
     }
 
-    const totalPagamento = linhas.reduce((acc, l) => acc + (Number(l.valor) || 0), 0)
-    const valorEntrada   = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
-    const totalComEntrada = totalPagamento + valorEntrada
+    const totalPagamento    = linhas.reduce((acc, l) => acc + (Number(l.valor) || 0), 0)
+    const valorEntradaBruto = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
+    const totalDebitos      = temEntrada ? debitosEntrada.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0) : 0
+    const totalComEntrada   = totalPagamento + valorEntradaBruto - totalDebitos
 
     if (Math.abs(totalComEntrada - dados.valor_venda) > 0.01) {
-      const detalhe = valorEntrada > 0
-        ? `pagamentos (${formatarMoeda(totalPagamento)}) + entrada (${formatarMoeda(valorEntrada)}) = ${formatarMoeda(totalComEntrada)}`
+      const detalhe = valorEntradaBruto > 0
+        ? `pagamentos (${formatarMoeda(totalPagamento)}) + entrada líquida (${formatarMoeda(valorEntradaBruto - totalDebitos)}) = ${formatarMoeda(totalComEntrada)}`
         : `soma dos pagamentos (${formatarMoeda(totalPagamento)})`
       setErroMetodos(`${detalhe} não corresponde ao valor da venda (${formatarMoeda(dados.valor_venda)}).`)
       document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
@@ -522,7 +527,13 @@ export default function NovaVenda() {
       if (documentosEntrada.length) await salvarDocumentosNoBanco(documentosEntrada)
 
       if (temEntrada && dadosEntrada.marca && dadosEntrada.modelo && dadosEntrada.placa) {
-        await salvarEntradaVeiculo(saleId, dadosEntrada as DadosEntradaVeiculo)
+        const debitosParaSalvar: DebitoEntrada[] = debitosEntrada
+          .filter((d) => d.descricao.trim() || parseFloat(d.valor) > 0)
+          .map((d) => ({ descricao: d.descricao, valor: parseFloat(d.valor) || 0 }))
+        await salvarEntradaVeiculo(saleId, {
+          ...(dadosEntrada as DadosEntradaVeiculo),
+          debitos: debitosParaSalvar,
+        })
       }
 
       await carregar(usuario.id)
@@ -535,10 +546,12 @@ export default function NovaVenda() {
   }
 
   // Calculadora ao vivo
-  const totalPagamento   = linhas.reduce((acc, l) => acc + (Number(l.valor) || 0), 0)
-  const valorEntradaCalc = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
-  const totalComEntrada  = totalPagamento + valorEntradaCalc
-  const valorVenda       = Number(watch('valor_venda')) || 0
+  const totalPagamento      = linhas.reduce((acc, l) => acc + (Number(l.valor) || 0), 0)
+  const valorEntradaCalc    = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
+  const totalDebitosEntrada = temEntrada ? debitosEntrada.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0) : 0
+  const valorEntradaLiquida = valorEntradaCalc - totalDebitosEntrada
+  const totalComEntrada     = totalPagamento + valorEntradaLiquida
+  const valorVenda          = Number(watch('valor_venda')) || 0
   const confere = valorVenda > 0 && Math.abs(totalComEntrada - valorVenda) <= 0.01
   const diverge = valorVenda > 0 && totalComEntrada > 0 && !confere
 
@@ -711,10 +724,24 @@ export default function NovaVenda() {
                 </div>
               ))}
               {valorEntradaCalc > 0 && (
-                <div className="flex justify-between items-center text-blue-600 text-xs mb-1">
-                  <span>Veículo de entrada:</span>
-                  <span>{formatarMoeda(valorEntradaCalc)}</span>
-                </div>
+                <>
+                  <div className="flex justify-between items-center text-blue-600 text-xs mb-1">
+                    <span>{totalDebitosEntrada > 0 ? 'Entrada (bruto):' : 'Veículo de entrada:'}</span>
+                    <span>{formatarMoeda(valorEntradaCalc)}</span>
+                  </div>
+                  {debitosEntrada.filter((d) => parseFloat(d.valor) > 0).map((d) => (
+                    <div key={d.id} className="flex justify-between items-center text-amber-600 text-xs mb-1 pl-3">
+                      <span>− {d.descricao || 'Débito'}:</span>
+                      <span>− {formatarMoeda(parseFloat(d.valor) || 0)}</span>
+                    </div>
+                  ))}
+                  {totalDebitosEntrada > 0 && (
+                    <div className="flex justify-between items-center text-blue-800 text-xs mb-1 font-medium">
+                      <span>Entrada líquida:</span>
+                      <span>{formatarMoeda(valorEntradaLiquida)}</span>
+                    </div>
+                  )}
+                </>
               )}
               <div className={`flex justify-between items-center pt-1.5 border-t mt-1 ${
                 confere ? 'border-green-200' : diverge ? 'border-red-200' : 'border-gray-200'
@@ -886,6 +913,64 @@ export default function NovaVenda() {
                   <Input placeholder="Condições do veículo, detalhes relevantes..." value={dadosEntrada.observacoes ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, observacoes: e.target.value }))} />
                 </div>
+              </div>
+
+              {/* Débitos do veículo de entrada */}
+              <div className="border-t border-gray-100 pt-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Débitos do Veículo</p>
+                  <button
+                    type="button"
+                    onClick={() => setDebitosEntrada((prev) => [
+                      ...prev,
+                      { id: crypto.randomUUID(), descricao: '', valor: '' },
+                    ])}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                  >
+                    <Plus size={13} />
+                    Adicionar débito
+                  </button>
+                </div>
+
+                {debitosEntrada.length === 0 && (
+                  <p className="text-xs text-gray-400">Nenhum débito. Clique em "Adicionar débito" se houver IPVA, multas ou outros encargos.</p>
+                )}
+
+                <div className="space-y-2">
+                  {debitosEntrada.map((d) => (
+                    <div key={d.id} className="flex gap-2 items-center">
+                      <Input
+                        placeholder="Descrição (ex: IPVA, multas...)"
+                        value={d.descricao}
+                        onChange={(e) => setDebitosEntrada((prev) =>
+                          prev.map((x) => x.id === d.id ? { ...x, descricao: e.target.value } : x)
+                        )}
+                        className="flex-1 text-sm"
+                      />
+                      <div className="w-32 shrink-0">
+                        <InputMoeda
+                          value={d.valor}
+                          onChange={(v) => setDebitosEntrada((prev) =>
+                            prev.map((x) => x.id === d.id ? { ...x, valor: v } : x)
+                          )}
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setDebitosEntrada((prev) => prev.filter((x) => x.id !== d.id))}
+                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                      >
+                        <X size={15} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+
+                {totalDebitosEntrada > 0 && (
+                  <p className="text-xs text-amber-700 font-medium mt-2">
+                    Total de débitos: {formatarMoeda(totalDebitosEntrada)} — Entrada líquida: {formatarMoeda(valorEntradaLiquida)}
+                  </p>
+                )}
               </div>
 
               <div className="border-t border-gray-100 pt-4 space-y-4">
