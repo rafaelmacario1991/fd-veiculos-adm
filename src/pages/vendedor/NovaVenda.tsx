@@ -21,6 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { InputMoeda } from '@/components/ui/input-moeda'
 import UploadFotos from '@/components/vendas/UploadFotos'
 import UploadDocumento from '@/components/vendas/UploadDocumento'
 import type { AnexoVenda } from '@/services/anexos'
@@ -34,9 +35,21 @@ import { Camera, Car, AlertCircle, Plus, X, Loader2 } from 'lucide-react'
 // ---------------------------------------------------------------
 // Schema de validação
 // ---------------------------------------------------------------
+function normalizarNumero(v: unknown): number | undefined {
+  if (v === '' || v === undefined || v === null) return undefined
+  const s = String(v).trim()
+  if (!s) return undefined
+  // Aceita "1.500,50" (pt-BR) ou "1500.50" (en-US)
+  const normalizado = s.includes(',')
+    ? s.replace(/\./g, '').replace(',', '.')
+    : s
+  const n = Number(normalizado)
+  return isNaN(n) ? undefined : n
+}
+
 const numInt = (msg?: string) =>
   z.preprocess(
-    (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
+    normalizarNumero,
     z.number({ error: msg }).int()
   )
 
@@ -50,7 +63,7 @@ const schema = z.object({
   placa: z.string().min(7, 'Placa inválida').max(8),
   quilometragem: numInt('Quilometragem inválida').pipe(z.number().int().min(0)),
   valor_venda: z.preprocess(
-    (v) => (v === '' || v === undefined || v === null ? undefined : Number(v)),
+    normalizarNumero,
     z.number().positive('Valor inválido')
   ),
   comprador_nome: z.string().min(1, 'Obrigatório'),
@@ -172,72 +185,76 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
   const extraCartao        = linha.tipo === 'cartao'
   const extraPromissoria   = linha.tipo === 'promissoria'
 
+  const selectTipo = (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
+      <Select value={linha.tipo} onValueChange={(v) => onChange({ tipo: v as ChaveMetodo })}>
+        <SelectTrigger className="h-9 text-sm"><SelectValue /></SelectTrigger>
+        <SelectContent>
+          {METODOS.map((m) => (
+            <SelectItem
+              key={m.key}
+              value={m.key}
+              disabled={m.key === 'financiamento' && temFinanciamento && linha.tipo !== 'financiamento'}
+            >
+              {m.label}
+              {m.key === 'financiamento' && temFinanciamento && linha.tipo !== 'financiamento' ? ' (já adicionado)' : ''}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    </div>
+  )
+
+  const inputValor = (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">Valor (R$) *</label>
+      <InputMoeda
+        value={linha.valor}
+        onChange={(v) => onChange({ valor: v })}
+        className="h-9 text-sm"
+      />
+    </div>
+  )
+
+  const inputData = (
+    <div>
+      <label className="block text-xs font-medium text-gray-600 mb-1">Data do pagamento</label>
+      <Input type="date" className="h-9 text-sm" value={linha.data} onChange={(e) => onChange({ data: e.target.value })} />
+    </div>
+  )
+
+  const btnRemover = (
+    <button
+      type="button"
+      onClick={onRemover}
+      disabled={!podRemover}
+      className="h-9 w-9 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
+      title="Remover"
+    >
+      <X size={15} />
+    </button>
+  )
+
   return (
     <div className="rounded-lg border border-gray-200 bg-gray-50/40 overflow-hidden">
-      {/* Linha principal */}
-      <div className="grid grid-cols-[1fr_1fr_1fr_auto] gap-2 p-3 items-end">
-        {/* Tipo */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Tipo *</label>
-          <Select
-            value={linha.tipo}
-            onValueChange={(v) => onChange({ tipo: v as ChaveMetodo })}
-          >
-            <SelectTrigger className="h-9 text-sm">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {METODOS.map((m) => (
-                <SelectItem
-                  key={m.key}
-                  value={m.key}
-                  disabled={m.key === 'financiamento' && temFinanciamento && linha.tipo !== 'financiamento'}
-                >
-                  {m.label}
-                  {m.key === 'financiamento' && temFinanciamento && linha.tipo !== 'financiamento'
-                    ? ' (já adicionado)' : ''}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+      {/* Layout mobile */}
+      <div className="sm:hidden p-3 space-y-2">
+        <div className="flex items-end gap-2">
+          <div className="flex-1">{selectTipo}</div>
+          <div className="pb-0.5">{btnRemover}</div>
         </div>
-
-        {/* Valor */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Valor (R$) *</label>
-          <Input
-            type="number"
-            step="0.01"
-            placeholder="0,00"
-            className="h-9 text-sm"
-            value={linha.valor}
-            onChange={(e) => onChange({ valor: e.target.value })}
-          />
+        <div className="grid grid-cols-2 gap-2">
+          {inputValor}
+          {inputData}
         </div>
-
-        {/* Data */}
-        <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Data do pagamento</label>
-          <Input
-            type="date"
-            className="h-9 text-sm"
-            value={linha.data}
-            onChange={(e) => onChange({ data: e.target.value })}
-          />
-        </div>
-
-        {/* Remover */}
-        <div className="pb-0.5">
-          <button
-            type="button"
-            onClick={onRemover}
-            disabled={!podRemover}
-            className="h-9 w-9 flex items-center justify-center rounded-md text-gray-400 hover:text-red-500 hover:bg-red-50 disabled:opacity-30 disabled:cursor-not-allowed transition-colors"
-            title="Remover"
-          >
-            <X size={15} />
-          </button>
-        </div>
+      </div>
+      {/* Layout desktop */}
+      <div className="hidden sm:grid sm:grid-cols-[1fr_1fr_1fr_auto] gap-2 p-3 items-end">
+        {selectTipo}
+        {inputValor}
+        {inputData}
+        <div className="pb-0.5">{btnRemover}</div>
       </div>
 
       {/* Campos extras — Financiamento */}
@@ -272,13 +289,10 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Valor da Parcela (R$)</label>
-            <Input
-              type="number"
-              step="0.01"
-              placeholder="1.500,00"
-              className="h-9 text-sm"
+            <InputMoeda
               value={linha.valorParcela}
-              onChange={(e) => onChange({ valorParcela: e.target.value })}
+              onChange={(v) => onChange({ valorParcela: v })}
+              className="h-9 text-sm"
             />
           </div>
           <div>
@@ -549,19 +563,19 @@ export default function NovaVenda() {
             <Input {...register('cor')} placeholder="Ex: Prata" />
           </Campo>
           <Campo label="Ano Fabricação *" erro={errors.ano_fabricacao?.message}>
-            <Input {...register('ano_fabricacao')} type="number" placeholder="2020" />
+            <Input {...register('ano_fabricacao')} type="text" inputMode="numeric" placeholder="2020" />
           </Campo>
           <Campo label="Ano Modelo *" erro={errors.ano_modelo?.message}>
-            <Input {...register('ano_modelo')} type="number" placeholder="2021" />
+            <Input {...register('ano_modelo')} type="text" inputMode="numeric" placeholder="2021" />
           </Campo>
           <Campo label="Placa *" erro={errors.placa?.message}>
             <Input {...register('placa')} placeholder="ABC1234" className="uppercase" />
           </Campo>
           <Campo label="Quilometragem *" erro={errors.quilometragem?.message}>
-            <Input {...register('quilometragem')} type="number" placeholder="45000" />
+            <Input {...register('quilometragem')} type="text" inputMode="numeric" placeholder="45000" />
           </Campo>
           <Campo label="Valor de Venda (R$) *" erro={errors.valor_venda?.message}>
-            <Input {...register('valor_venda')} type="number" step="0.01" placeholder="45000.00" />
+            <Input {...register('valor_venda')} type="text" inputMode="decimal" placeholder="0,00" />
           </Campo>
         </Secao>
 
@@ -765,12 +779,9 @@ export default function NovaVenda() {
               {tipoTransferencia === 'cobrada' && (
                 <div className="mt-2">
                   <Label className="text-xs font-medium text-gray-600 mb-1 block">Valor cobrado (R$)</Label>
-                  <Input
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
+                  <InputMoeda
                     value={valorTransferencia}
-                    onChange={(e) => setValorTransferencia(e.target.value)}
+                    onChange={setValorTransferencia}
                   />
                 </div>
               )}
@@ -860,8 +871,10 @@ export default function NovaVenda() {
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Valor Estimado (R$)</Label>
-                  <Input type="number" step="0.01" placeholder="25000.00" value={dadosEntrada.valor_estimado ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, valor_estimado: Number(e.target.value) }))} />
+                  <InputMoeda
+                    value={dadosEntrada.valor_estimado != null ? String(dadosEntrada.valor_estimado) : ''}
+                    onChange={(v) => setDadosEntrada((p) => ({ ...p, valor_estimado: v ? parseFloat(v) : undefined }))}
+                  />
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Nome do Proprietário</Label>
