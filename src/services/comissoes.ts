@@ -91,9 +91,9 @@ export function calcularValorEntrada(
       comissao.valor_financiado != null && comissao.retorno != null
         ? calcularRetornoFinanciamento(comissao.valor_financiado, comissao.retorno)
         : 0
-    return valorBase + retorno
+    return valorBase + retorno + comissao.valor_comissao
   }
-  if (comissao.tipo === 'a_vista') return valorBase
+  if (comissao.tipo === 'a_vista') return valorBase + comissao.valor_comissao
   // transferencia e vale usam o valor armazenado
   return comissao.valor_comissao
 }

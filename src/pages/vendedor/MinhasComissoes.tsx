@@ -82,11 +82,14 @@ export default function MinhasComissoes() {
   const transferenciaTotal = comissoes
     .filter((c) => c.tipo === 'transferencia')
     .reduce((s, c) => s + c.valor_comissao, 0)
+  const transferenciaEmbutidaTotal = comissoes
+    .filter((c) => (c.tipo === 'a_vista' || c.tipo === 'financiamento') && c.valor_comissao > 0)
+    .reduce((s, c) => s + c.valor_comissao, 0)
   const valesTotal         = comissoes
     .filter((c) => c.tipo === 'vale')
     .reduce((s, c) => s + c.valor_comissao, 0)
 
-  const creditos = salarioBase + comissaoVendas + retornoTotal + transferenciaTotal
+  const creditos = salarioBase + comissaoVendas + retornoTotal + transferenciaTotal + transferenciaEmbutidaTotal
   const liquido  = creditos - valesTotal
 
   const agora = format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
@@ -151,7 +154,7 @@ export default function MinhasComissoes() {
             <p className="text-xs text-gray-500 font-medium mb-1">Comissão Vendas</p>
             <p className="text-base font-bold text-blue-600">{moeda(comissaoVendas + retornoTotal + transferenciaTotal)}</p>
             <p className="text-[11px] text-gray-400">
-              {totalVendas}v × {moeda(valorBase)} + retornos + transf.
+              {totalVendas}v × {moeda(valorBase)}{retornoTotal > 0 ? ' + retornos' : ''}{(transferenciaTotal + transferenciaEmbutidaTotal) > 0 ? ' + transf.' : ''}
             </p>
           </div>
           <div className="bg-white border border-gray-200 rounded-xl p-4">
@@ -257,10 +260,10 @@ export default function MinhasComissoes() {
                       <td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>{moeda(retornoTotal)}</td>
                     </tr>
                   )}
-                  {transferenciaTotal > 0 && (
+                  {(transferenciaTotal + transferenciaEmbutidaTotal) > 0 && (
                     <tr style={{ borderBottom: '1px solid #E5E7EB' }}>
                       <td style={{ padding: '5px 8px', color: '#374151' }}>Comissões por Transferência</td>
-                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>{moeda(transferenciaTotal)}</td>
+                      <td style={{ padding: '5px 8px', textAlign: 'right', color: '#374151' }}>{moeda(transferenciaTotal + transferenciaEmbutidaTotal)}</td>
                     </tr>
                   )}
                   <tr style={{ borderBottom: '2px solid #D1D5DB', background: '#F9FAFB' }}>
@@ -324,11 +327,13 @@ export default function MinhasComissoes() {
                       {c.tipo === 'financiamento' && retorno !== null && (
                         <p className="text-[11px] text-gray-400 mt-0.5">
                           Base: {moeda(valorBase)} + Retorno: {moeda(retorno)}
+                          {c.valor_comissao > 0 ? ` + Transf.: ${moeda(c.valor_comissao)}` : ''}
                         </p>
                       )}
                       {c.tipo === 'a_vista' && (
                         <p className="text-[11px] text-gray-400 mt-0.5">
                           Base Faixa {faixaAtual?.faixa}: {moeda(valorBase)}
+                          {c.valor_comissao > 0 ? ` + Transf.: ${moeda(c.valor_comissao)}` : ''}
                         </p>
                       )}
 
@@ -568,6 +573,8 @@ function ModalNovaEntrada({
   const [valorFinanciado, setValorFinanciado] = useState('')
   const [retorno, setRetorno]             = useState('')
   const [valorLivre, setValorLivre]       = useState('')
+  const [comTransferencia, setComTransferencia] = useState(false)
+  const [valorTransferencia, setValorTransferencia] = useState('')
   const [salvando, setSalvando]           = useState(false)
   const [erro, setErro]                   = useState('')
 
@@ -578,10 +585,12 @@ function ModalNovaEntrada({
   const ret = parseFloat(retorno.replace(',', '.')) || 0
   const retornoCalc        = vf > 0 && ret > 0 ? calcularRetornoFinanciamento(vf, ret) : 0
   const totalFinanciamento = valorBase + retornoCalc
+  const vtCalc = comTransferencia ? (parseFloat(valorTransferencia.replace(',', '.')) || 0) : 0
 
   function resetar() {
     setTipo('financiamento'); setDescricao(''); setPlaca('')
     setValorFinanciado(''); setRetorno(''); setValorLivre(''); setErro('')
+    setComTransferencia(false); setValorTransferencia('')
   }
   function fechar() { resetar(); onFechar() }
 
@@ -592,15 +601,12 @@ function ModalNovaEntrada({
     if (tipo === 'financiamento') {
       if (!descricao.trim()) { setErro('Informe o veículo'); return }
       if (!vf || !ret) { setErro('Informe o valor financiado e o retorno'); return }
-      valorComissao = 0
+      if (comTransferencia && vtCalc <= 0) { setErro('Informe o valor da comissão por transferência'); return }
+      valorComissao = vtCalc
     } else if (tipo === 'a_vista') {
       if (!descricao.trim()) { setErro('Informe o veículo'); return }
-      valorComissao = 0
-    } else if (tipo === 'transferencia') {
-      const v = parseFloat(valorLivre.replace(',', '.'))
-      if (!descricao.trim()) { setErro('Informe a descrição'); return }
-      if (!v || v <= 0) { setErro('Informe o valor da comissão'); return }
-      valorComissao = v
+      if (comTransferencia && vtCalc <= 0) { setErro('Informe o valor da comissão por transferência'); return }
+      valorComissao = vtCalc
     } else if (tipo === 'vale') {
       const v = parseFloat(valorLivre.replace(',', '.'))
       if (!descricao.trim()) { setErro('Informe a descrição do vale'); return }
@@ -637,12 +643,16 @@ function ModalNovaEntrada({
         <div className="space-y-4 pt-1">
           <div>
             <Label className="text-xs font-medium">Tipo *</Label>
-            <Select value={tipo} onValueChange={(v) => { setTipo(v as TipoComissao); setErro('') }}>
+            <Select value={tipo} onValueChange={(v) => {
+              setTipo(v as TipoComissao)
+              setErro('')
+              setComTransferencia(false)
+              setValorTransferencia('')
+            }}>
               <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="financiamento">Financiamento</SelectItem>
                 <SelectItem value="a_vista">À Vista</SelectItem>
-                <SelectItem value="transferencia">Comissão por Transferência</SelectItem>
                 <SelectItem value="vale">Vale (desconto)</SelectItem>
               </SelectContent>
             </Select>
@@ -685,19 +695,27 @@ function ModalNovaEntrada({
                   <Input className="mt-1" placeholder="Ex: 3" value={retorno} onChange={(e) => setRetorno(e.target.value)} />
                 </div>
               </div>
-              {retornoCalc > 0 && (
+              {(retornoCalc > 0 || vtCalc > 0) && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg px-3 py-2.5 space-y-1 text-xs">
                   <div className="flex justify-between text-gray-600">
                     <span>Base Faixa {proximaFaixa}</span>
                     <span>{moeda(valorBase)}</span>
                   </div>
-                  <div className="flex justify-between text-gray-600">
-                    <span>Retorno ((VF × {ret}) × 0,75 × 0,001)</span>
-                    <span>{moeda(retornoCalc)}</span>
-                  </div>
+                  {retornoCalc > 0 && (
+                    <div className="flex justify-between text-gray-600">
+                      <span>Retorno ((VF × {ret}) × 0,75 × 0,001)</span>
+                      <span>{moeda(retornoCalc)}</span>
+                    </div>
+                  )}
+                  {vtCalc > 0 && (
+                    <div className="flex justify-between text-purple-700">
+                      <span>Comissão de Transferência</span>
+                      <span>{moeda(vtCalc)}</span>
+                    </div>
+                  )}
                   <div className="flex justify-between font-semibold text-blue-800 border-t border-blue-200 pt-1">
                     <span>Total desta venda</span>
-                    <span>{moeda(totalFinanciamento)}</span>
+                    <span>{moeda(totalFinanciamento + vtCalc)}</span>
                   </div>
                 </div>
               )}
@@ -705,22 +723,48 @@ function ModalNovaEntrada({
           )}
 
           {tipo === 'a_vista' && (
-            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2 flex items-center justify-between text-xs">
-              <span className="text-green-700 font-medium">Comissão desta venda</span>
-              <span className="font-bold text-green-700">{moeda(valorBase)}</span>
+            <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2.5 text-xs space-y-1">
+              <div className="flex items-center justify-between">
+                <span className="text-green-700 font-medium">Base Faixa {proximaFaixa}</span>
+                <span className="font-bold text-green-700">{moeda(valorBase)}</span>
+              </div>
+              {vtCalc > 0 && (
+                <>
+                  <div className="flex items-center justify-between text-purple-700">
+                    <span>Comissão de Transferência</span>
+                    <span>{moeda(vtCalc)}</span>
+                  </div>
+                  <div className="flex items-center justify-between font-semibold text-green-800 border-t border-green-200 pt-1">
+                    <span>Total desta venda</span>
+                    <span>{moeda(valorBase + vtCalc)}</span>
+                  </div>
+                </>
+              )}
             </div>
           )}
 
-          {tipo === 'transferencia' && (
-            <div className="space-y-3">
-              <div>
-                <Label className="text-xs font-medium">Descrição *</Label>
-                <Input className="mt-1" placeholder="Ex: Gol 2020 — João Silva" value={descricao} onChange={(e) => setDescricao(e.target.value)} />
-              </div>
-              <div>
-                <Label className="text-xs font-medium">Valor da Comissão (R$) *</Label>
-                <Input className="mt-1" placeholder="0,00" value={valorLivre} onChange={(e) => setValorLivre(e.target.value)} />
-              </div>
+          {(tipo === 'financiamento' || tipo === 'a_vista') && (
+            <div className="border-t border-gray-100 pt-3 space-y-3">
+              <label className="flex items-center gap-2 cursor-pointer select-none">
+                <input
+                  type="checkbox"
+                  checked={comTransferencia}
+                  onChange={(e) => { setComTransferencia(e.target.checked); if (!e.target.checked) setValorTransferencia('') }}
+                  className="h-4 w-4 rounded border-gray-300 accent-blue-600 cursor-pointer"
+                />
+                <span className="text-xs font-medium text-gray-700">Comissão de Transferência?</span>
+              </label>
+              {comTransferencia && (
+                <div>
+                  <Label className="text-xs font-medium">Valor da Comissão de Transferência (R$) *</Label>
+                  <Input
+                    className="mt-1"
+                    placeholder="0,00"
+                    value={valorTransferencia}
+                    onChange={(e) => setValorTransferencia(e.target.value)}
+                  />
+                </div>
+              )}
             </div>
           )}
 
