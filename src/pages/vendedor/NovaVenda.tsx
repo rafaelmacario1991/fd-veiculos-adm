@@ -245,12 +245,19 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
         <div className="border-t border-gray-100 px-3 pb-3 pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="sm:col-span-3">
             <label className="block text-xs font-medium text-gray-600 mb-1">Banco / Financeira</label>
-            <Input
-              placeholder="Ex: Banco do Brasil"
-              className="h-9 text-sm"
+            <Select
               value={linha.banco}
-              onChange={(e) => onChange({ banco: e.target.value })}
-            />
+              onValueChange={(v) => onChange({ banco: v ?? '' })}
+            >
+              <SelectTrigger className="h-9 text-sm">
+                <SelectValue placeholder="Selecione o banco" />
+              </SelectTrigger>
+              <SelectContent>
+                {['Santander', 'BV', 'Safra', 'Itaú', 'Carbank', 'Pan', 'Bradesco', 'C6', 'Stellants', 'Daycoval', 'Omni'].map((banco) => (
+                  <SelectItem key={banco} value={banco}>{banco}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
