@@ -28,7 +28,7 @@ apenas registra e rastreia o status de cada etapa.
 | Upload de arquivos | Supabase Storage (buckets)          | Fotos e documentos do Resumo de Vendas          |
 | Automações         | n8n (instância própria — a definir) | Webhooks → WhatsApp Business API                |
 | WhatsApp           | Evolution API (agentesmkpro.cloud)  | Mesma instância do MKReport                     |
-| Hospedagem         | Vercel (frontend) + Supabase Cloud  | Sem domínio próprio por ora (vercel.app)        |
+| Hospedagem         | VPS Hostinger + Supabase Cloud      | https://sistemafdveiculos.com.br (Nginx + SSL)  |
 | Ícones             | Lucide React                        | Padrão shadcn/ui                                |
 | Datas              | date-fns                            | Cálculo de prazos (72h, 30 dias)                |
 
@@ -188,9 +188,24 @@ sales (
   comprador_nascimento date, comprador_logradouro text, comprador_numero text,
   comprador_complemento text, comprador_bairro text, comprador_cidade text,
   comprador_uf char(2), comprador_cep text, comprador_telefone text, comprador_email text,
-  forma_pagamento text, banco_financeira text, valor_entrada numeric,
-  valor_financiado numeric, numero_parcelas int, observacoes text,
+  forma_pagamento text,
+  formas_pagamento_json jsonb,          -- múltiplos métodos {tipo, valor, banco, parcelas...}
+  banco_financeira text, valor_entrada numeric,
+  valor_financiado numeric, numero_parcelas int,
+  transferencia_info text,              -- "Cortesia" | valor cobrado (R$)
+  ipva_info text,                       -- texto livre
+  observacoes text,
   criado_em timestamptz, atualizado_em timestamptz
+)
+
+-- Veículo de entrada (troca)
+trade_in_vehicles (
+  id uuid PK, sale_id uuid FK UNIQUE,
+  marca text, modelo text, versao text, cor text,
+  ano_fabricacao int, ano_modelo int, placa text, renavam text, chassi text,
+  quilometragem int, valor_estimado numeric, proprietario_nome text, observacoes text,
+  debitos_json jsonb DEFAULT '[]',      -- [{descricao, valor}] deduzidos da entrada
+  criado_em timestamptz
 )
 
 -- Anexos (Supabase Storage)
@@ -247,8 +262,11 @@ notifications_log (id uuid PK, sale_id uuid FK, evento text, destinatario_id uui
 
 ## Deploy e Variáveis de Ambiente
 
-- **Frontend:** Vercel — deploy automático via GitHub
-- **Backend:** Supabase Cloud
+- **Frontend:** VPS Hostinger (72.62.10.198) — build local + scp + nginx reload
+- **Script de deploy:** `.\deploy\deploy-fdveiculos.ps1`
+- **SSH key:** `~/.ssh/mkreport_vps`
+- **Domínio:** https://sistemafdveiculos.com.br
+- **Backend:** Supabase Cloud (projeto: cobrxwpplqzejdwyabqi)
 - `.env.local`:
   ```
   VITE_SUPABASE_URL=
@@ -273,28 +291,48 @@ notifications_log (id uuid PK, sale_id uuid FK, evento text, destinatario_id uui
 
 ---
 
-## Itens Pendentes (Fase 0 — Pré-Dev)
+## Rotas Implementadas
 
-- [ ] Validar campos definitivos do Resumo de Vendas com a FD Veículos
-- [ ] Definir número máximo de fotos por venda e categorias de anexo
-- [ ] Confirmar lista inicial de despachantes
-- [ ] Confirmar números WhatsApp dos grupos de alerta
-- [ ] Confirmar hexadecimais exatos do azul e vermelho da marca
-- [ ] Criar projeto no Supabase
-- [ ] Criar repositório no GitHub
-- [ ] Configurar instância n8n para FD Veículos
-- [ ] Definir domínio do sistema
+| Rota | Componente | Acesso |
+|------|-----------|--------|
+| `/vendedor` | PainelVendedor | vendedor, supervisor |
+| `/vendedor/nova-venda` | NovaVenda | vendedor, supervisor |
+| `/vendedor/editar-venda/:id` | NovaVenda (modo edição) | vendedor (se ≠ concluida), supervisor (qualquer) |
+| `/vendedor/comissoes` | MinhasComissoes | vendedor |
+| `/setor/contratos` | PainelContratos | contratos |
+| `/setor/financeiro` | PainelFinanceiro | financeiro |
+| `/setor/fiscal` | PainelFiscal | fiscal |
+| `/setor/transferencia` | PainelTransferencia | transferencia |
+| `/supervisor` | PainelSupervisor | supervisor |
+| `/supervisor/lista` | ListaSupervisor | supervisor |
+| `/supervisor/aprovacoes` | Aprovacoes | supervisor |
+| `/supervisor/quadro-vendas` | QuadroVendas | supervisor |
+| `/supervisor/usuarios` | GestaoUsuarios | supervisor |
+| `/supervisor/despachantes` | GestaoDespachantes | supervisor |
+| `/venda/:saleId` | DetalheVenda | todos |
+| `/inicio` | Inicio | todos |
+| `/configuracoes` | Configuracoes | todos |
+
+---
+
+## Armadilhas Conhecidas
+
+- **`seller_pendencies` tem 2 FKs para `users`** (`vendedor_id_fkey` e `aprovado_por_fkey`) — sempre usar FK explícito: `users!seller_pendencies_vendedor_id_fkey(nome)`. Sem o hint o Supabase retorna erro silencioso e lista vazia.
+- **`gen_salt`/`crypt`** em funções SQL: usar `SET search_path = public, extensions` e `extensions.crypt()` / `extensions.gen_salt()`.
+- **Fotos no modo edição:** `salvarFotosNoBanco` faz INSERT. Rastrear IDs existentes com `useRef<Set<string>>` e filtrar antes de salvar. Mesmo padrão para documentos de entrada.
+- **`listarTodasVendas`:** usa `users!vendedor_id(nome)` para evitar ambiguidade no join.
+- **Deploy SSH:** o comando `ssh rm -rf /tmp/fdveiculos_upload` às vezes pendura — matar o processo e rodar novamente.
 
 ---
 
 ## Fases de Desenvolvimento
 
-| Fase | Descrição                                                          |
-|------|--------------------------------------------------------------------|
-| 0    | Preparação e validação com cliente                                 |
-| 1    | Base: setup, Supabase, auth, usuários                              |
-| 2    | Fluxo principal: Resumo de Vendas, demandas, pendências vendedor   |
-| 3    | Painéis administrativos por setor                                  |
-| 4    | Dashboard do Supervisor e monitoramento                            |
-| 5    | Notificações WhatsApp (n8n)                                        |
-| 6    | QA, ajustes UX e deploy em produção                               |
+| Fase | Descrição | Status |
+|------|-----------|--------|
+| 0 | Preparação e validação com cliente | ✅ Concluída |
+| 1 | Base: setup, Supabase, auth, usuários | ✅ Concluída |
+| 2 | Fluxo principal: Resumo de Vendas, demandas, pendências | ✅ Concluída |
+| 3 | Painéis administrativos por setor | ✅ Concluída |
+| 4 | Dashboard do Supervisor, monitoramento, edição de vendas | ✅ Concluída |
+| 5 | Notificações WhatsApp (n8n) | ⬜ Não iniciada |
+| 6 | QA, ajustes UX e deploy em produção | 🔄 Em andamento |
