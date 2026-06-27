@@ -2,8 +2,8 @@ import { useState, useRef } from 'react'
 import { uploadFoto, deletarFotoTemp, type AnexoVenda } from '@/services/anexos'
 import { ImagePlus, X, Loader2, AlertCircle } from 'lucide-react'
 
-const MIN_FOTOS = 5
-const MAX_FOTOS = 20
+const MIN_FOTOS = 3
+const MAX_FOTOS = 5
 
 interface Props {
   saleId: string

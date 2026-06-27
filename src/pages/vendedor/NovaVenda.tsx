@@ -92,7 +92,7 @@ const UFS = [
   'SP','SE','TO',
 ]
 
-const MIN_FOTOS = 5
+const MIN_FOTOS = 3
 
 // ---------------------------------------------------------------
 // Tipos de pagamento — linhas dinâmicas
