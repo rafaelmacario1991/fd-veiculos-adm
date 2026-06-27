@@ -165,6 +165,24 @@ export async function listarTodasVendas(filtros: FiltrosVendas = {}): Promise<Ve
   return (data ?? []) as VendaListagem[]
 }
 
+export async function buscarVendaPorId(id: string): Promise<VendaListagem> {
+  const { data, error } = await supabase
+    .from('sales')
+    .select('*, seller_pendencies(*), sector_activities(*)')
+    .eq('id', id)
+    .single()
+  if (error) throw error
+  return data as VendaListagem
+}
+
+export async function atualizarVenda(id: string, dados: DadosNovaVenda): Promise<void> {
+  const { error } = await supabase
+    .from('sales')
+    .update({ ...dados, atualizado_em: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw error
+}
+
 export async function cancelarVenda(vendaId: string): Promise<void> {
   const { error } = await supabase
     .from('sales')

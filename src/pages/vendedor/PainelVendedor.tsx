@@ -16,7 +16,7 @@ import {
   corPorStatusPrazo,
 } from '@/lib/prazos'
 import type { VendaListagem } from '@/services/vendas'
-import { PlusCircle, Car, Clock, CheckCircle2, AlertCircle, Camera, ChevronDown, ChevronUp } from 'lucide-react'
+import { PlusCircle, Car, Clock, CheckCircle2, AlertCircle, Camera, ChevronDown, ChevronUp, Pencil } from 'lucide-react'
 
 const MIN_FOTOS = 5
 
@@ -110,6 +110,7 @@ interface CartaoVendaProps {
 }
 
 function CartaoVenda({ venda, onRecarregar }: CartaoVendaProps) {
+  const navigate = useNavigate()
   const pendenciasAbertas = venda.seller_pendencies.filter(
     (p) => p.status === 'aberta' || p.status === 'aguardando_aprovacao'
   )
@@ -164,6 +165,17 @@ function CartaoVenda({ venda, onRecarregar }: CartaoVendaProps) {
           <p className="text-sm font-semibold text-gray-700">
             {formatarMoeda(venda.valor_venda)}
           </p>
+          {venda.status !== 'concluida' && (
+            <button
+              type="button"
+              onClick={() => navigate(`/vendedor/editar-venda/${venda.id}`)}
+              className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+              title="Editar venda"
+            >
+              <Pencil size={11} />
+              Editar
+            </button>
+          )}
         </div>
       </div>
 

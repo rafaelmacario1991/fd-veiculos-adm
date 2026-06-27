@@ -1,13 +1,12 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useParams } from 'react-router-dom'
 import { useForm, type Resolver } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/store/authStore'
 import { useRequererPerfil } from '@/hooks/useAuth'
-import { criarVenda } from '@/services/vendas'
-import { salvarFotosNoBanco } from '@/services/anexos'
-import { salvarDocumentosNoBanco } from '@/services/entradaVeiculo'
+import { criarVenda, buscarVendaPorId, atualizarVenda } from '@/services/vendas'
+import { salvarFotosNoBanco, listarAnexos } from '@/services/anexos'
 import { useVendasStore } from '@/store/vendasStore'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
@@ -27,6 +26,9 @@ import UploadDocumento from '@/components/vendas/UploadDocumento'
 import type { AnexoVenda } from '@/services/anexos'
 import {
   salvarEntradaVeiculo,
+  buscarEntradaVeiculo,
+  listarDocumentosEntrada,
+  salvarDocumentosNoBanco,
   type DadosEntradaVeiculo,
   type DocumentoEntrada,
   type DebitoEntrada,
@@ -40,7 +42,6 @@ function normalizarNumero(v: unknown): number | undefined {
   if (v === '' || v === undefined || v === null) return undefined
   const s = String(v).trim()
   if (!s) return undefined
-  // Aceita "1.500,50" (pt-BR) ou "1500.50" (en-US)
   const normalizado = s.includes(',')
     ? s.replace(/\./g, '').replace(',', '.')
     : s
@@ -116,13 +117,10 @@ interface LinhaPagamento {
   tipo: ChaveMetodo
   valor: string
   data: string
-  // Financiamento
   banco: string
   parcelas: string
   valorParcela: string
-  // Cartão
   parcelasCartao: string
-  // Promissória
   parcelasPromissoria: string
   dataPrimeiroPagamento: string
 }
@@ -137,6 +135,33 @@ function novaLinha(tipo: ChaveMetodo = 'dinheiro'): LinhaPagamento {
 
 function formatarMoeda(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}
+
+// Converte formas_pagamento_json de volta para linhas editáveis
+type MetodoPag = {
+  tipo: string; valor: number; data?: string; banco?: string
+  numero_parcelas?: number; valor_parcela?: number; data_primeiro_pagamento?: string
+}
+
+function jsonParaLinhas(formas: MetodoPag[]): LinhaPagamento[] {
+  return formas.map((m) => ({
+    id: crypto.randomUUID(),
+    tipo: m.tipo as ChaveMetodo,
+    valor: String(m.valor ?? ''),
+    data: m.data ?? '',
+    banco: m.banco ?? '',
+    parcelas: m.tipo === 'financiamento' ? String(m.numero_parcelas ?? '') : '',
+    valorParcela: String(m.valor_parcela ?? ''),
+    parcelasCartao: m.tipo === 'cartao' ? String(m.numero_parcelas ?? '') : '',
+    parcelasPromissoria: m.tipo === 'promissoria' ? String(m.numero_parcelas ?? '') : '',
+    dataPrimeiroPagamento: m.data_primeiro_pagamento ?? '',
+  }))
+}
+
+function parseTransferencia(info: string | null | undefined): { tipo: 'cortesia' | 'cobrada' | null; valor: string } {
+  if (!info) return { tipo: null, valor: '' }
+  if (info === 'Cortesia') return { tipo: 'cortesia', valor: '' }
+  return { tipo: 'cobrada', valor: info }
 }
 
 // ---------------------------------------------------------------
@@ -366,15 +391,24 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
 // Página principal
 // ---------------------------------------------------------------
 export default function NovaVenda() {
-  useRequererPerfil(['vendedor'])
+  useRequererPerfil(['vendedor', 'supervisor'])
+
+  const { id: vendaId } = useParams<{ id: string }>()
+  const editando = !!vendaId
 
   const { usuario } = useAuthStore()
   const { carregar } = useVendasStore()
   const navigate = useNavigate()
   const [enviando, setEnviando] = useState(false)
   const [erroGlobal, setErroGlobal] = useState<string | null>(null)
+  const [carregandoEdicao, setCarregandoEdicao] = useState(editando)
 
-  const [saleId] = useState(() => crypto.randomUUID())
+  // saleId: para nova venda gera UUID; para edição usa o ID existente
+  const [saleId] = useState(() => vendaId ?? crypto.randomUUID())
+
+  // Refs para controlar quais fotos/docs já estão no banco (modo edição)
+  const fotosNoBancoIds = useRef<Set<string>>(new Set())
+  const docsNoBancoIds = useRef<Set<string>>(new Set())
 
   // Linhas de pagamento
   const [linhas, setLinhas] = useState<LinhaPagamento[]>([novaLinha()])
@@ -386,6 +420,104 @@ export default function NovaVenda() {
   // CEP
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [erroCep, setErroCep]         = useState<string | null>(null)
+
+  // Transferência e IPVA
+  const [tipoTransferencia, setTipoTransferencia] = useState<'cortesia' | 'cobrada' | null>(null)
+  const [valorTransferencia, setValorTransferencia] = useState('')
+  const [ipvaInfo, setIpvaInfo] = useState('')
+
+  // Veículo de entrada
+  const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
+  const [dadosEntrada, setDadosEntrada] = useState<Partial<DadosEntradaVeiculo>>({})
+  const [documentosEntrada, setDocumentosEntrada] = useState<DocumentoEntrada[]>([])
+
+  interface LinhaDebito { id: string; descricao: string; valor: string }
+  const [debitosEntrada, setDebitosEntrada] = useState<LinhaDebito[]>([])
+
+  const {
+    register,
+    handleSubmit,
+    watch,
+    setValue,
+    reset,
+    formState: { errors },
+  } = useForm<FormData>({ resolver: zodResolver(schema) as Resolver<FormData> })
+
+  // ── Carrega dados existentes no modo edição ──────────────────
+  useEffect(() => {
+    if (!vendaId) return
+
+    setCarregandoEdicao(true)
+    Promise.all([
+      buscarVendaPorId(vendaId),
+      listarAnexos(vendaId),
+      buscarEntradaVeiculo(vendaId),
+      listarDocumentosEntrada(vendaId),
+    ])
+      .then(([venda, fotosExistentes, entradaExistente, docsExistentes]) => {
+        // Preenche os campos do form
+        reset({
+          marca:                  venda.marca,
+          modelo:                 venda.modelo,
+          versao:                 venda.versao ?? '',
+          ano_fabricacao:         venda.ano_fabricacao as unknown as number,
+          ano_modelo:             venda.ano_modelo as unknown as number,
+          cor:                    venda.cor,
+          placa:                  venda.placa,
+          quilometragem:          venda.quilometragem as unknown as number,
+          valor_venda:            venda.valor_venda as unknown as number,
+          comprador_nome:         venda.comprador_nome,
+          comprador_cpf_cnpj:     venda.comprador_cpf_cnpj,
+          comprador_rg:           venda.comprador_rg ?? '',
+          comprador_nascimento:   venda.comprador_nascimento ?? '',
+          comprador_logradouro:   venda.comprador_logradouro,
+          comprador_numero:       venda.comprador_numero,
+          comprador_complemento:  venda.comprador_complemento ?? '',
+          comprador_bairro:       venda.comprador_bairro,
+          comprador_cidade:       venda.comprador_cidade,
+          comprador_uf:           venda.comprador_uf,
+          comprador_cep:          venda.comprador_cep,
+          comprador_telefone:     venda.comprador_telefone,
+          comprador_email:        venda.comprador_email ?? '',
+          observacoes:            venda.observacoes ?? '',
+        })
+
+        // Formas de pagamento
+        if (venda.formas_pagamento_json && venda.formas_pagamento_json.length > 0) {
+          setLinhas(jsonParaLinhas(venda.formas_pagamento_json as MetodoPag[]))
+        }
+
+        // Transferência e IPVA
+        const transf = parseTransferencia(venda.transferencia_info)
+        setTipoTransferencia(transf.tipo)
+        setValorTransferencia(transf.valor)
+        setIpvaInfo(venda.ipva_info ?? '')
+
+        // Fotos — rastreia IDs já no banco
+        fotosNoBancoIds.current = new Set(fotosExistentes.map((f) => f.id))
+        setFotos(fotosExistentes)
+
+        // Documentos de entrada — rastreia IDs já no banco
+        docsNoBancoIds.current = new Set(docsExistentes.map((d) => d.id))
+        setDocumentosEntrada(docsExistentes)
+
+        // Veículo de entrada
+        if (entradaExistente) {
+          setTemEntrada(true)
+          const { debitos, ...resto } = entradaExistente
+          setDadosEntrada(resto)
+          if (debitos && debitos.length > 0) {
+            setDebitosEntrada(
+              debitos.map((d) => ({ id: crypto.randomUUID(), descricao: d.descricao, valor: String(d.valor) }))
+            )
+          }
+        } else {
+          setTemEntrada(false)
+        }
+      })
+      .catch(() => setErroGlobal('Erro ao carregar dados da venda para edição.'))
+      .finally(() => setCarregandoEdicao(false))
+  }, [vendaId])
 
   async function buscarCep(valor: string) {
     const cep = valor.replace(/\D/g, '')
@@ -406,27 +538,6 @@ export default function NovaVenda() {
       setBuscandoCep(false)
     }
   }
-
-  // Transferência e IPVA
-  const [tipoTransferencia, setTipoTransferencia] = useState<'cortesia' | 'cobrada' | null>(null)
-  const [valorTransferencia, setValorTransferencia] = useState('')
-  const [ipvaInfo, setIpvaInfo] = useState('')
-
-  // Veículo de entrada
-  const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
-  const [dadosEntrada, setDadosEntrada] = useState<Partial<DadosEntradaVeiculo>>({})
-  const [documentosEntrada, setDocumentosEntrada] = useState<DocumentoEntrada[]>([])
-
-  interface LinhaDebito { id: string; descricao: string; valor: string }
-  const [debitosEntrada, setDebitosEntrada] = useState<LinhaDebito[]>([])
-
-  const {
-    register,
-    handleSubmit,
-    watch,
-    setValue,
-    formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) as Resolver<FormData> })
 
   // Helpers de linha
   const temFinanciamento = linhas.some((l) => l.tipo === 'financiamento')
@@ -468,7 +579,8 @@ export default function NovaVenda() {
     }
     setErroMetodos(null)
 
-    if (fotos.length < MIN_FOTOS) {
+    // Na criação exige mínimo de fotos; na edição pula (já foram enviadas antes)
+    if (!editando && fotos.length < MIN_FOTOS) {
       setErroGlobal(`Adicione pelo menos ${MIN_FOTOS} fotos do veículo antes de registrar.`)
       document.getElementById('secao-fotos')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
@@ -505,27 +617,35 @@ export default function NovaVenda() {
         tipoTransferencia === 'cobrada' && valorTransferencia ? valorTransferencia :
         undefined
 
-      await criarVenda(
-        {
-          ...dados,
-          versao:                   dados.versao || undefined,
-          comprador_rg:             dados.comprador_rg || undefined,
-          comprador_nascimento:     dados.comprador_nascimento || undefined,
-          comprador_complemento:    dados.comprador_complemento || undefined,
-          comprador_email:          dados.comprador_email || undefined,
-          forma_pagamento:          formaPagamentoResumo,
-          formas_pagamento_json:    formasPagamentoJson,
-          observacoes:              dados.observacoes || undefined,
-          transferencia_info:       transferenciaInfo,
-          ipva_info:                ipvaInfo || undefined,
-        },
-        usuario.id,
-        saleId
-      )
+      const dadosVenda = {
+        ...dados,
+        versao:                   dados.versao || undefined,
+        comprador_rg:             dados.comprador_rg || undefined,
+        comprador_nascimento:     dados.comprador_nascimento || undefined,
+        comprador_complemento:    dados.comprador_complemento || undefined,
+        comprador_email:          dados.comprador_email || undefined,
+        forma_pagamento:          formaPagamentoResumo,
+        formas_pagamento_json:    formasPagamentoJson,
+        observacoes:              dados.observacoes || undefined,
+        transferencia_info:       transferenciaInfo,
+        ipva_info:                ipvaInfo || undefined,
+      }
 
-      await salvarFotosNoBanco(fotos)
-      if (documentosEntrada.length) await salvarDocumentosNoBanco(documentosEntrada)
+      if (editando && vendaId) {
+        await atualizarVenda(vendaId, dadosVenda)
+      } else {
+        await criarVenda(dadosVenda, usuario.id, saleId)
+      }
 
+      // Salva apenas fotos NOVAS (não as que já estavam no banco)
+      const fotasNovas = fotos.filter((f) => !fotosNoBancoIds.current.has(f.id))
+      if (fotasNovas.length) await salvarFotosNoBanco(fotasNovas)
+
+      // Salva apenas documentos NOVOS
+      const docsNovos = documentosEntrada.filter((d) => !docsNoBancoIds.current.has(d.id))
+      if (docsNovos.length) await salvarDocumentosNoBanco(docsNovos)
+
+      // Veículo de entrada (upsert — funciona para criação e edição)
       if (temEntrada && dadosEntrada.marca && dadosEntrada.modelo && dadosEntrada.placa) {
         const debitosParaSalvar: DebitoEntrada[] = debitosEntrada
           .filter((d) => d.descricao.trim() || parseFloat(d.valor) > 0)
@@ -537,9 +657,9 @@ export default function NovaVenda() {
       }
 
       await carregar(usuario.id)
-      navigate('/vendedor')
+      navigate(-1)
     } catch {
-      setErroGlobal('Erro ao registrar a venda. Tente novamente.')
+      setErroGlobal(editando ? 'Erro ao salvar alterações. Tente novamente.' : 'Erro ao registrar a venda. Tente novamente.')
     } finally {
       setEnviando(false)
     }
@@ -555,9 +675,23 @@ export default function NovaVenda() {
   const confere = valorVenda > 0 && Math.abs(totalComEntrada - valorVenda) <= 0.01
   const diverge = valorVenda > 0 && totalComEntrada > 0 && !confere
 
+  if (carregandoEdicao) {
+    return (
+      <div className="flex flex-col flex-1">
+        <Header titulo="Editar Venda" subtitulo="Carregando dados..." />
+        <div className="flex-1 flex items-center justify-center">
+          <Loader2 size={24} className="animate-spin text-gray-400" />
+        </div>
+      </div>
+    )
+  }
+
   return (
     <div className="flex flex-col flex-1">
-      <Header titulo="Nova Venda" subtitulo="Resumo de Vendas" />
+      <Header
+        titulo={editando ? 'Editar Venda' : 'Nova Venda'}
+        subtitulo={editando ? 'Altere os dados e salve' : 'Resumo de Vendas'}
+      />
 
       <form onSubmit={handleSubmit(enviar)} className="flex-1 p-4 md:p-6 space-y-4 max-w-4xl">
 
@@ -597,7 +731,7 @@ export default function NovaVenda() {
           <div className="flex items-center justify-between mb-1">
             <div className="flex items-center gap-2">
               <Camera size={15} className="text-blue-600" />
-              <h2 className="text-sm font-semibold text-gray-900">Fotos do Veículo *</h2>
+              <h2 className="text-sm font-semibold text-gray-900">Fotos do Veículo {!editando && '*'}</h2>
             </div>
             {fotos.length > 0 && (
               <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
@@ -1015,12 +1149,14 @@ export default function NovaVenda() {
 
         <div className="flex items-center gap-3 pb-8">
           <Button type="submit" disabled={enviando}>
-            {enviando ? 'Registrando...' : 'Registrar Venda'}
+            {enviando
+              ? (editando ? 'Salvando...' : 'Registrando...')
+              : (editando ? 'Salvar Alterações' : 'Registrar Venda')}
           </Button>
-          <Button type="button" variant="outline" onClick={() => navigate('/vendedor')} disabled={enviando}>
+          <Button type="button" variant="outline" onClick={() => navigate(-1)} disabled={enviando}>
             Cancelar
           </Button>
-          {fotos.length < MIN_FOTOS && (
+          {!editando && fotos.length < MIN_FOTOS && (
             <span className="text-xs text-amber-600 flex items-center gap-1">
               <AlertCircle size={12} />
               {MIN_FOTOS - fotos.length} foto{MIN_FOTOS - fotos.length > 1 ? 's' : ''} ainda necessária{MIN_FOTOS - fotos.length > 1 ? 's' : ''}

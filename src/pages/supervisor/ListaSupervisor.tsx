@@ -15,7 +15,7 @@ import {
 import Header from '@/components/layout/Header'
 import { Badge } from '@/components/ui/badge'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { ArrowLeft, AlertTriangle, Clock, CheckCircle2 } from 'lucide-react'
+import { ArrowLeft, AlertTriangle, Clock, CheckCircle2, Pencil } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
 const TITULOS: Record<string, string> = {
@@ -120,6 +120,7 @@ export default function ListaSupervisor() {
 // ---------------------------------------------------------------
 
 function TabelaVendas({ vendas }: { vendas: VendaCompleta[] }) {
+  const navigate = useNavigate()
   const total = vendas.reduce((s, v) => s + Number(v.valor_venda), 0)
 
   return (
@@ -143,12 +144,13 @@ function TabelaVendas({ vendas }: { vendas: VendaCompleta[] }) {
               <TableHead>Setores</TableHead>
               <TableHead>Status</TableHead>
               <TableHead>Data</TableHead>
+              <TableHead></TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {vendas.length === 0 && (
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-gray-400 py-12 text-sm">
+                <TableCell colSpan={8} className="text-center text-gray-400 py-12 text-sm">
                   Nenhuma venda no período
                 </TableCell>
               </TableRow>
@@ -185,6 +187,17 @@ function TabelaVendas({ vendas }: { vendas: VendaCompleta[] }) {
                 </TableCell>
                 <TableCell className="text-xs text-gray-400">
                   {new Date(v.criado_em).toLocaleDateString('pt-BR')}
+                </TableCell>
+                <TableCell>
+                  <button
+                    type="button"
+                    onClick={() => navigate(`/vendedor/editar-venda/${v.id}`)}
+                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                    title="Editar venda"
+                  >
+                    <Pencil size={12} />
+                    Editar
+                  </button>
                 </TableCell>
               </TableRow>
             ))}

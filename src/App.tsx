@@ -50,6 +50,7 @@ function App() {
           {/* Vendedor */}
           <Route path="/vendedor" element={<PainelVendedor />} />
           <Route path="/vendedor/nova-venda" element={<NovaVenda />} />
+          <Route path="/vendedor/editar-venda/:id" element={<NovaVenda />} />
           <Route path="/vendedor/comissoes" element={<MinhasComissoes />} />
 
           {/* Setores */}
