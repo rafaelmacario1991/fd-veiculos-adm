@@ -48,10 +48,12 @@ export default function ListaSupervisor() {
   const [aprovacoes, setAprovacoes] = useState<PendenciaComVenda[]>([])
   const [atividades, setAtividades] = useState<AtividadeDetalhe[]>([])
   const [carregando, setCarregando] = useState(true)
+  const [erro, setErro] = useState<string | null>(null)
 
   useEffect(() => {
     async function carregar() {
       setCarregando(true)
+      setErro(null)
       try {
         if (tipo === 'vendas') {
           const data = await listarTodasVendas(de, ate)
@@ -69,6 +71,9 @@ export default function ListaSupervisor() {
           const data = await listarAtividadesSetor(setor, de, ate)
           setAtividades(data)
         }
+      } catch (e) {
+        console.error('[ListaSupervisor]', e)
+        setErro('Erro ao carregar dados. Verifique o console para detalhes.')
       } finally {
         setCarregando(false)
       }
@@ -96,6 +101,10 @@ export default function ListaSupervisor() {
 
       <div className="flex-1 p-6">
         {carregando && <p className="text-gray-400 text-sm">Carregando...</p>}
+
+        {!carregando && erro && (
+          <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-lg">{erro}</div>
+        )}
 
         {!carregando && tipo === 'vendas' && <TabelaVendas vendas={vendas} />}
         {!carregando && (tipo === 'pendencias' || tipo === 'vencidas') && <TabelaPendencias pendencias={pendencias} />}

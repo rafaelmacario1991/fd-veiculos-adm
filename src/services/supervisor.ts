@@ -186,9 +186,10 @@ export async function listarPendenciasVendedor(
   ate: string,
   status?: 'aberta' | 'aguardando_aprovacao' | 'aprovada'
 ): Promise<PendenciaDetalhe[]> {
+  // FK explícito pois seller_pendencies tem dois FKs para users (vendedor_id e aprovado_por)
   let query = supabase
     .from('seller_pendencies')
-    .select('id, tipo, status, prazo, concluido_em, criado_em, sales(marca, modelo, placa, comprador_nome), users(nome)')
+    .select('id, tipo, status, prazo, concluido_em, criado_em, sales(marca, modelo, placa, comprador_nome), users!seller_pendencies_vendedor_id_fkey(nome)')
     .gte('criado_em', de)
     .lte('criado_em', ate + 'T23:59:59')
     .order('prazo', { ascending: true })
@@ -203,7 +204,7 @@ export async function listarPendenciasVendedor(
 export async function listarPendenciasVencidas(): Promise<PendenciaDetalhe[]> {
   const { data, error } = await supabase
     .from('seller_pendencies')
-    .select('id, tipo, status, prazo, concluido_em, criado_em, sales(marca, modelo, placa, comprador_nome), users(nome)')
+    .select('id, tipo, status, prazo, concluido_em, criado_em, sales(marca, modelo, placa, comprador_nome), users!seller_pendencies_vendedor_id_fkey(nome)')
     .eq('status', 'aberta')
     .lt('prazo', new Date().toISOString())
     .order('prazo', { ascending: true })
