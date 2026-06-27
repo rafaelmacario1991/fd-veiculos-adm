@@ -176,7 +176,14 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
                 ))}
               </div>
             ) : (
-              <Linha label="Forma de Pagamento" valor={venda.forma_pagamento} />
+              /* Fallback para vendas antigas (sem formas_pagamento_json) */
+              <>
+                <Linha label="Forma de Pagamento" valor={venda.forma_pagamento} />
+                <Linha label="Banco / Financeira" valor={venda.banco_financeira} />
+                <Linha label="Valor de Entrada" valor={moeda(venda.valor_entrada)} />
+                <Linha label="Valor Financiado" valor={moeda(venda.valor_financiado)} />
+                <Linha label="Parcelas" valor={venda.numero_parcelas ? `${venda.numero_parcelas}x` : null} />
+              </>
             )}
           </Secao>
 

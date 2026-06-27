@@ -12,11 +12,20 @@ interface InputMoedaProps {
 function parseBRL(v: string): number {
   if (!v || !v.trim()) return 0
   const s = v.trim()
-  // Se tem vírgula → separador decimal pt-BR: "1.500,50" ou "1500,50"
   if (s.includes(',')) {
+    // pt-BR com vírgula: "1.500,50" ou "1500,50" → remove pontos (milhar), troca vírgula por ponto
     return parseFloat(s.replace(/\./g, '').replace(',', '.')) || 0
   }
-  // Sem vírgula: pode ser "1500" ou "1500.50" (en-US)
+  if (s.includes('.')) {
+    // Sem vírgula, com ponto: verifica se é milhar (3 dígitos após o ponto) ou decimal
+    const afterDot = s.split('.').pop() ?? ''
+    if (afterDot.length === 3) {
+      // "2.334" → milhar pt-BR → 2334
+      return parseFloat(s.replace(/\./g, '')) || 0
+    }
+    // "1500.50" → decimal en-US → 1500.5
+    return parseFloat(s) || 0
+  }
   return parseFloat(s) || 0
 }
 
@@ -42,8 +51,8 @@ export function InputMoeda({ value, onChange, placeholder = '0,00', className, d
   }
 
   function handleChange(e: React.ChangeEvent<HTMLInputElement>) {
-    // Só permite dígitos, vírgula e ponto
-    const raw = e.target.value.replace(/[^\d,\.]/g, '')
+    // Só dígitos e vírgula — ponto é separador de milhar e não deve ser digitado
+    const raw = e.target.value.replace(/[^\d,]/g, '')
     setTextoEdit(raw)
   }
 
