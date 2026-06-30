@@ -12,6 +12,7 @@ export interface VendaAnalytics {
   valor_venda: number
   forma_pagamento: string
   banco_financeira: string | null
+  formas_pagamento_json: { tipo: string; banco?: string; valor?: number }[] | null
   vendedor_id: string
   vendedor_nome: string
 }
@@ -53,7 +54,7 @@ export async function listarVendedores(): Promise<Vendedor[]> {
 export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQuadro> {
   let query = supabase
     .from('sales')
-    .select('id, criado_em, valor_venda, forma_pagamento, banco_financeira, vendedor_id, users!sales_vendedor_id_fkey(nome)')
+    .select('id, criado_em, valor_venda, forma_pagamento, banco_financeira, formas_pagamento_json, vendedor_id, users!sales_vendedor_id_fkey(nome)')
     .order('criado_em')
 
   if (filtros.de)        query = query.gte('criado_em', filtros.de)
@@ -86,12 +87,25 @@ export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQ
     forma: formaLabel[f] ?? f, qtd: d.qtd, valor: d.valor,
   })).sort((a, b) => b.qtd - a.qtd)
 
-  // Por banco/financeira (só financiamentos)
+  // Por banco/financeira — extrai de formas_pagamento_json (formato novo) ou banco_financeira (legado)
   const bancoMap = new Map<string, { qtd: number; valor: number }>()
-  for (const v of vendas.filter((v) => v.forma_pagamento === 'financiamento')) {
-    const b = v.banco_financeira?.trim() || 'Não informado'
-    const cur = bancoMap.get(b) ?? { qtd: 0, valor: 0 }
-    bancoMap.set(b, { qtd: cur.qtd + 1, valor: cur.valor + v.valor_venda })
+  for (const v of vendas) {
+    const itens = (v.formas_pagamento_json ?? []).filter(
+      (item) => item.tipo === 'financiamento' && item.banco?.trim(),
+    )
+    if (itens.length > 0) {
+      // Agrupa por banco único dentro da venda (evita duplicar se houver 2 parcelas do mesmo banco)
+      const bancosVenda = [...new Set(itens.map((i) => i.banco!.trim()))]
+      for (const b of bancosVenda) {
+        const cur = bancoMap.get(b) ?? { qtd: 0, valor: 0 }
+        bancoMap.set(b, { qtd: cur.qtd + 1, valor: cur.valor + v.valor_venda })
+      }
+    } else if (v.banco_financeira?.trim()) {
+      // Formato legado
+      const b = v.banco_financeira.trim()
+      const cur = bancoMap.get(b) ?? { qtd: 0, valor: 0 }
+      bancoMap.set(b, { qtd: cur.qtd + 1, valor: cur.valor + v.valor_venda })
+    }
   }
   const porBanco = [...bancoMap.entries()]
     .map(([banco, d]) => ({ banco, qtd: d.qtd, valor: d.valor }))
