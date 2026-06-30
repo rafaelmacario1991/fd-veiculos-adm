@@ -93,3 +93,48 @@ export async function listarEventosCalendario(): Promise<EventoCalendario[]> {
     (a, b) => new Date(a.prazo).getTime() - new Date(b.prazo).getTime(),
   )
 }
+
+const TIPO_LABEL: Record<string, string> = {
+  vistoria: 'Vistoria do Veículo',
+  firma:    'Reconhecimento de Firma',
+}
+
+export async function listarPendenciasDoVendedor(vendedorId: string): Promise<EventoCalendario[]> {
+  const { data, error } = await supabase
+    .from('seller_pendencies')
+    .select('id, sale_id, tipo, status, prazo, sales(marca, modelo)')
+    .eq('vendedor_id', vendedorId)
+    .neq('status', 'aprovada')
+    .order('prazo', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((p: any) => ({
+    id:       p.id,
+    titulo:   `${TIPO_LABEL[p.tipo] ?? p.tipo} — ${p.sales ? `${p.sales.marca} ${p.sales.modelo}` : 'Venda'}`,
+    prazo:    p.prazo,
+    tipo:     'pendencia_vendedor' as const,
+    status:   p.status,
+    sale_id:  p.sale_id,
+    venda:    p.sales ? `${p.sales.marca} ${p.sales.modelo}` : undefined,
+  }))
+}
+
+export async function listarAtividadesDoSetor(setor: string): Promise<EventoCalendario[]> {
+  const { data, error } = await supabase
+    .from('sector_activities')
+    .select('id, sale_id, setor, status, prazo, sales(marca, modelo)')
+    .eq('setor', setor)
+    .neq('status', 'concluida')
+    .not('prazo', 'is', null)
+    .order('prazo', { ascending: true })
+  if (error) throw error
+  return (data ?? []).map((a: any) => ({
+    id:      a.id,
+    titulo:  a.sales ? `${a.sales.marca} ${a.sales.modelo}` : 'Venda',
+    prazo:   a.prazo,
+    tipo:    'atividade_setor' as const,
+    status:  a.status,
+    setor:   a.setor,
+    sale_id: a.sale_id,
+    venda:   a.sales ? `${a.sales.marca} ${a.sales.modelo}` : undefined,
+  }))
+}
