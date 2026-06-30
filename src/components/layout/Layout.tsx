@@ -3,6 +3,7 @@ import { useNavigate, Outlet } from 'react-router-dom'
 import { useAuthStore } from '@/store/authStore'
 import Sidebar from './Sidebar'
 import { useTheme } from '@/hooks/useTheme'
+import fdLogo from '@/assets/fd-logo.png'
 
 export default function Layout() {
   const { usuario, carregando } = useAuthStore()
@@ -64,8 +65,7 @@ export default function Layout() {
               <line x1="2" y1="14" x2="16" y2="14" />
             </svg>
           </button>
-          <img src="/fd-logo.png" alt="FD Veículos" className="h-7 w-auto object-contain"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = 'none' }} />
+          <img src={fdLogo} alt="FD Veículos" className="h-7 w-auto object-contain" />
           <span className="text-sm font-semibold text-gray-900">FD Veículos</span>
         </div>
 
