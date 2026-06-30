@@ -303,7 +303,7 @@ export default function Inicio() {
   const todosAtivos  = Object.values(painelDados).flat().filter(estaAtivo)
   const kpiVencidos  = todosAtivos.filter((e) => isPast(parseISO(e.prazo)) && !isToday(parseISO(e.prazo)))
   const kpiHoje      = todosAtivos.filter((e) => isToday(parseISO(e.prazo)))
-  const kpiEmAberto  = todosAtivos.filter((e) => !isPast(parseISO(e.prazo)))
+  const kpiEmAberto  = todosAtivos
 
   // Calendário
   function selecionarDia(data: Date, evs: EventoCalendario[]) {
