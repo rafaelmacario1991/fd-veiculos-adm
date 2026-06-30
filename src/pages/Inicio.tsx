@@ -18,7 +18,7 @@ import { useAuthStore } from '@/store/authStore'
 import CalendarioAtividades from '@/components/ui/CalendarioAtividades'
 import ModalNovaTarefa from '@/components/tarefas/ModalNovaTarefa'
 import ModalDetalhesTarefa from '@/components/tarefas/ModalDetalhesTarefa'
-import type { Tarefa } from '@/types'
+import type { Tarefa, Perfil } from '@/types'
 
 // ============================================================
 // Helpers
@@ -277,7 +277,7 @@ export default function Inicio() {
         novos['vendedor'] = await listarPendenciasDoVendedor(u.id)
       }
 
-      const setores = ['contratos', 'financeiro', 'fiscal', 'transferencia']
+      const setores: Perfil[] = ['contratos', 'financeiro', 'fiscal', 'transferencia']
       const visiveis = tp('supervisor') ? setores : setores.filter((s) => tp(s))
       const resultados = await Promise.all(
         visiveis.map((s) => listarAtividadesDoSetor(s).then((itens) => ({ s, itens })))
