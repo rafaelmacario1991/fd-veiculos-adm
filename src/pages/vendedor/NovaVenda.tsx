@@ -430,6 +430,8 @@ export default function NovaVenda() {
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
   const [dadosEntrada, setDadosEntrada] = useState<Partial<DadosEntradaVeiculo>>({})
   const [documentosEntrada, setDocumentosEntrada] = useState<DocumentoEntrada[]>([])
+  const [errosEntrada, setErrosEntrada] = useState<Record<string, string>>({})
+  const [erroDocEntrada, setErroDocEntrada] = useState<string | null>(null)
 
   interface LinhaDebito { id: string; descricao: string; valor: string }
   const [debitosEntrada, setDebitosEntrada] = useState<LinhaDebito[]>([])
@@ -578,6 +580,44 @@ export default function NovaVenda() {
       return
     }
     setErroMetodos(null)
+
+    // Validação do veículo de entrada
+    if (temEntrada) {
+      const camposObrigatorios: Array<[keyof DadosEntradaVeiculo, string]> = [
+        ['marca', 'Marca'],
+        ['modelo', 'Modelo'],
+        ['versao', 'Versão'],
+        ['cor', 'Cor'],
+        ['ano_fabricacao', 'Ano Fabricação'],
+        ['ano_modelo', 'Ano Modelo'],
+        ['placa', 'Placa'],
+        ['quilometragem', 'Quilometragem'],
+        ['valor_estimado', 'Valor Estimado'],
+        ['proprietario_nome', 'Nome do Proprietário'],
+      ]
+      const erros: Record<string, string> = {}
+      for (const [campo, label] of camposObrigatorios) {
+        const v = dadosEntrada[campo]
+        if (v === undefined || v === null || String(v).trim() === '' || Number(v) === 0 && campo !== 'quilometragem') {
+          erros[campo] = `${label} é obrigatório`
+        }
+      }
+      const temCrlv = documentosEntrada.some((d) => d.tipo === 'crlv_entrada')
+      const temCnh  = documentosEntrada.some((d) => d.tipo === 'cnh_rg_entrada')
+      let erroDoc: string | null = null
+      if (!temCrlv && !temCnh) erroDoc = 'Anexe o CRLV e a CNH/RG do proprietário.'
+      else if (!temCrlv)       erroDoc = 'Anexe o CRLV do veículo.'
+      else if (!temCnh)        erroDoc = 'Anexe a CNH ou RG do proprietário.'
+
+      if (Object.keys(erros).length > 0 || erroDoc) {
+        setErrosEntrada(erros)
+        setErroDocEntrada(erroDoc)
+        document.getElementById('secao-entrada')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        return
+      }
+      setErrosEntrada({})
+      setErroDocEntrada(null)
+    }
 
     // Na criação exige mínimo de fotos; na edição pula (já foram enviadas antes)
     if (!editando && fotos.length < MIN_FOTOS) {
@@ -963,7 +1003,7 @@ export default function NovaVenda() {
         </div>
 
         {/* Veículo de Entrada */}
-        <div className="bg-white border border-gray-200 rounded-xl p-5">
+        <div id="secao-entrada" className="bg-white border border-gray-200 rounded-xl p-5">
           <div className="flex items-center gap-2 mb-4 pb-3 border-b border-gray-100">
             <Car size={15} className="text-blue-600" />
             <h2 className="text-sm font-semibold text-gray-900">Veículo de Entrada (Troca)</h2>
@@ -994,53 +1034,63 @@ export default function NovaVenda() {
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Marca *</Label>
                   <Input placeholder="Ex: Fiat" value={dadosEntrada.marca ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, marca: e.target.value }))} />
+                  {errosEntrada.marca && <p className="text-xs text-red-600 mt-1">{errosEntrada.marca}</p>}
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Modelo *</Label>
                   <Input placeholder="Ex: Uno" value={dadosEntrada.modelo ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, modelo: e.target.value }))} />
+                  {errosEntrada.modelo && <p className="text-xs text-red-600 mt-1">{errosEntrada.modelo}</p>}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Versão</Label>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Versão *</Label>
                   <Input placeholder="Ex: Way 1.0" value={dadosEntrada.versao ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, versao: e.target.value }))} />
+                  {errosEntrada.versao && <p className="text-xs text-red-600 mt-1">{errosEntrada.versao}</p>}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Cor</Label>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Cor *</Label>
                   <Input placeholder="Ex: Branca" value={dadosEntrada.cor ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, cor: e.target.value }))} />
+                  {errosEntrada.cor && <p className="text-xs text-red-600 mt-1">{errosEntrada.cor}</p>}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Fabricação</Label>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Fabricação *</Label>
                   <Input type="number" placeholder="2018" value={dadosEntrada.ano_fabricacao ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, ano_fabricacao: Number(e.target.value) }))} />
+                  {errosEntrada.ano_fabricacao && <p className="text-xs text-red-600 mt-1">{errosEntrada.ano_fabricacao}</p>}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Modelo</Label>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Modelo *</Label>
                   <Input type="number" placeholder="2019" value={dadosEntrada.ano_modelo ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, ano_modelo: Number(e.target.value) }))} />
+                  {errosEntrada.ano_modelo && <p className="text-xs text-red-600 mt-1">{errosEntrada.ano_modelo}</p>}
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Placa *</Label>
                   <Input placeholder="ABC1234" className="uppercase" value={dadosEntrada.placa ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, placa: e.target.value.toUpperCase() }))} />
+                  {errosEntrada.placa && <p className="text-xs text-red-600 mt-1">{errosEntrada.placa}</p>}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Quilometragem</Label>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Quilometragem *</Label>
                   <Input type="number" placeholder="85000" value={dadosEntrada.quilometragem ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, quilometragem: Number(e.target.value) }))} />
+                  {errosEntrada.quilometragem && <p className="text-xs text-red-600 mt-1">{errosEntrada.quilometragem}</p>}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Valor Estimado (R$)</Label>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Valor Estimado (R$) *</Label>
                   <InputMoeda
                     value={dadosEntrada.valor_estimado != null ? String(dadosEntrada.valor_estimado) : ''}
                     onChange={(v) => setDadosEntrada((p) => ({ ...p, valor_estimado: v ? parseFloat(v) : undefined }))}
                   />
+                  {errosEntrada.valor_estimado && <p className="text-xs text-red-600 mt-1">{errosEntrada.valor_estimado}</p>}
                 </div>
                 <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Nome do Proprietário</Label>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Nome do Proprietário *</Label>
                   <Input placeholder="Nome completo" value={dadosEntrada.proprietario_nome ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, proprietario_nome: e.target.value }))} />
+                  {errosEntrada.proprietario_nome && <p className="text-xs text-red-600 mt-1">{errosEntrada.proprietario_nome}</p>}
                 </div>
                 <div className="col-span-2">
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Observações</Label>
@@ -1108,21 +1158,27 @@ export default function NovaVenda() {
               </div>
 
               <div className="border-t border-gray-100 pt-4 space-y-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Documentos</p>
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Documentos *</p>
                 <UploadDocumento
                   saleId={saleId}
                   tipo="crlv_entrada"
-                  label="CRLV — Certificado de Registro e Licenciamento do Veículo"
+                  label="CRLV — Certificado de Registro e Licenciamento do Veículo *"
                   documentos={documentosEntrada}
                   onChange={setDocumentosEntrada}
                 />
                 <UploadDocumento
                   saleId={saleId}
                   tipo="cnh_rg_entrada"
-                  label="CNH ou RG do Proprietário"
+                  label="CNH ou RG do Proprietário *"
                   documentos={documentosEntrada}
                   onChange={setDocumentosEntrada}
                 />
+                {erroDocEntrada && (
+                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">
+                    <AlertCircle size={14} />
+                    {erroDocEntrada}
+                  </div>
+                )}
               </div>
             </div>
           )}
