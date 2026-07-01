@@ -196,6 +196,7 @@ export default function PainelFinanceiro() {
                         atividade={a}
                         onVerResumo={() => setVendaSelecionada(a.sales)}
                         onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                        onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                         onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                         extra={
                           <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
@@ -375,6 +376,7 @@ export default function PainelFinanceiro() {
                       atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                       onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     />
                   ))}

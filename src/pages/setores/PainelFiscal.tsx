@@ -114,6 +114,7 @@ export default function PainelFiscal() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                       onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}>
                       <Button size="sm" onClick={() => abrirRegistroNfe(a)}>
                         <Receipt size={13} className="mr-1.5" />
@@ -135,6 +136,7 @@ export default function PainelFiscal() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                       onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     />
                   ))}

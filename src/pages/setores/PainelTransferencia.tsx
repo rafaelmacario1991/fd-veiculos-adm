@@ -158,6 +158,7 @@ export default function PainelTransferencia() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                       onExcluir={isSupervisor ? () => handleExcluirAtividade(a.id) : undefined}>
                       <Button size="sm" onClick={() => setAtividadeEnviando(a)}>
                         <Truck size={13} className="mr-1.5" />

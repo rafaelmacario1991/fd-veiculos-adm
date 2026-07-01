@@ -88,6 +88,7 @@ export default function PainelContratos() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                       onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     >
                       <Button size="sm" onClick={() => formalizarContrato(a)} disabled={processando === a.id}>
@@ -111,6 +112,7 @@ export default function PainelContratos() {
                     <CartaoSetor key={a.id} atividade={a}
                       onVerResumo={() => setVendaSelecionada(a.sales)}
                       onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                      onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                       onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     />
                   ))}
@@ -144,6 +146,7 @@ export function CartaoSetor({
   extra,
   onVerResumo,
   onVerHistorico,
+  onGerarContrato,
   onExcluir,
 }: {
   atividade: AtividadeComVenda
@@ -151,6 +154,7 @@ export function CartaoSetor({
   extra?: React.ReactNode
   onVerResumo?: () => void
   onVerHistorico?: () => void
+  onGerarContrato?: () => void
   onExcluir?: () => void
 }) {
   const v = atividade.sales
@@ -212,6 +216,12 @@ export function CartaoSetor({
               <Button size="sm" variant="outline" className="h-7 px-2 text-xs" onClick={onVerResumo}>
                 <Eye size={12} className="mr-1" />
                 Resumo
+              </Button>
+            )}
+            {onGerarContrato && (
+              <Button size="sm" variant="outline" className="h-7 px-2 text-xs text-blue-700 border-blue-200 hover:bg-blue-50" onClick={onGerarContrato}>
+                <FileText size={12} className="mr-1" />
+                Contrato
               </Button>
             )}
           </div>

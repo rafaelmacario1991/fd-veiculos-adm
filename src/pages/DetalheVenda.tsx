@@ -1,5 +1,5 @@
-import { useState, useEffect } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom'
 import { buscarDetalheVenda, type DetalheVenda } from '@/services/detalhes'
 import {
   excluirVenda, excluirAtividadeSetor,
@@ -150,7 +150,9 @@ function InfoLinha({ label, valor }: { label: string; valor?: string | null }) {
 export default function DetalheVenda() {
   const { saleId } = useParams<{ saleId: string }>()
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
   const { usuario } = useAuthStore()
+  const contratoAutoAberto = useRef(false)
   const isSupervisor = usuario?.perfis.includes('supervisor') ?? false
 
   const [venda, setVenda] = useState<DetalheVenda | null>(null)
@@ -203,6 +205,19 @@ export default function DetalheVenda() {
       .then(setVenda)
       .finally(() => setCarregando(false))
   }, [saleId])
+
+  // Auto-abre contrato quando acessado via ?contrato=1 (ex: botão nos cards de setor)
+  useEffect(() => {
+    if (!venda || contratoAutoAberto.current || searchParams.get('contrato') !== '1') return
+    contratoAutoAberto.current = true
+    const faltantes = CAMPOS_CONTRATO.filter((c) => !venda[c.campo])
+    if (faltantes.length > 0) {
+      setCamposFaltantes(faltantes)
+      setModalValidacao(true)
+    } else {
+      setMostrarContrato(true)
+    }
+  }, [venda]) // eslint-disable-line react-hooks/exhaustive-deps
 
   if (carregando) {
     return (
