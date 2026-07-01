@@ -88,11 +88,18 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
             Resumo de Venda — {venda.marca} {venda.modelo}
             <span className="ml-2 text-xs font-mono text-gray-400 uppercase">{venda.placa}</span>
           </DialogTitle>
-          <p className="text-xs text-gray-400 mt-0.5">
-            Enviado em {new Date(venda.criado_em).toLocaleDateString('pt-BR', {
-              day: '2-digit', month: 'long', year: 'numeric',
-            })}
-          </p>
+          <div className="flex items-center gap-3 mt-0.5 flex-wrap">
+            <p className="text-xs text-gray-400">
+              Enviado em {new Date(venda.criado_em).toLocaleDateString('pt-BR', {
+                day: '2-digit', month: 'long', year: 'numeric',
+              })}
+            </p>
+            {venda.users?.nome && (
+              <span className="text-xs font-medium text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                Vendedor: {venda.users.nome}
+              </span>
+            )}
+          </div>
         </DialogHeader>
 
         <div className="space-y-6 pt-2">

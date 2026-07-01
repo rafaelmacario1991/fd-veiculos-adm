@@ -175,6 +175,9 @@ export function CartaoSetor({
             {' · '}
             {new Date(atividade.criado_em).toLocaleDateString('pt-BR')}
           </p>
+          {v.users?.nome && (
+            <p className="text-xs text-blue-600 mt-0.5 font-medium">Vendedor: {v.users.nome}</p>
+          )}
         </div>
         <div className="flex flex-col items-end gap-2 flex-shrink-0">
           <div className="flex items-center gap-1.5">

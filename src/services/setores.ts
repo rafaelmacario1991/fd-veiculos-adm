@@ -26,7 +26,7 @@ export async function listarAtividadesDoSetor(
 ): Promise<AtividadeComVenda[]> {
   let query = supabase
     .from('sector_activities')
-    .select('*, sales(*)')
+    .select('*, sales(*, users!sales_vendedor_id_fkey(nome))')
     .eq('setor', setor)
     .order('criado_em', { ascending: false })
 
