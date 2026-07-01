@@ -421,9 +421,13 @@ export default function NovaVenda() {
   // Fotos
   const [fotos, setFotos] = useState<AnexoVenda[]>([])
 
-  // Placa — busca automática
+  // Placa — busca automática (veículo principal)
   const [buscandoPlaca, setBuscandoPlaca] = useState(false)
   const [erroBuscaPlaca, setErroBuscaPlaca] = useState<string | null>(null)
+
+  // Placa — busca automática (veículo de entrada)
+  const [buscandoPlacaEntrada, setBuscandoPlacaEntrada] = useState(false)
+  const [erroBuscaPlacaEntrada, setErroBuscaPlacaEntrada] = useState<string | null>(null)
 
   // CEP
   const [buscandoCep, setBuscandoCep] = useState(false)
@@ -555,6 +559,31 @@ export default function NovaVenda() {
       setErroBuscaPlaca('Consulta indisponível. Preencha os dados manualmente.')
     } finally {
       setBuscandoPlaca(false)
+    }
+  }
+
+  async function buscarDadosPorPlacaEntrada() {
+    const placa = dadosEntrada.placa ?? ''
+    if (placa.replace(/[^A-Za-z0-9]/g, '').length < 7) {
+      setErroBuscaPlacaEntrada('Informe a placa completa antes de buscar.')
+      return
+    }
+    setErroBuscaPlacaEntrada(null)
+    setBuscandoPlacaEntrada(true)
+    try {
+      const dados = await consultarPlaca(placa)
+      setDadosEntrada((p) => ({
+        ...p,
+        ...(dados.marca          ? { marca: dados.marca }                                  : {}),
+        ...(dados.modelo         ? { modelo: dados.modelo }                                : {}),
+        ...(dados.ano_fabricacao ? { ano_fabricacao: dados.ano_fabricacao }                : {}),
+        ...(dados.ano_modelo     ? { ano_modelo: dados.ano_modelo }                        : {}),
+        ...(dados.cor            ? { cor: dados.cor }                                      : {}),
+      }))
+    } catch {
+      setErroBuscaPlacaEntrada('Consulta indisponível. Preencha os dados manualmente.')
+    } finally {
+      setBuscandoPlacaEntrada(false)
     }
   }
 
@@ -1131,6 +1160,39 @@ export default function NovaVenda() {
             <div className="space-y-4">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                 <div>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Placa *</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      placeholder="ABC1234"
+                      className="uppercase flex-1"
+                      value={dadosEntrada.placa ?? ''}
+                      onChange={(e) => {
+                        setDadosEntrada((p) => ({ ...p, placa: e.target.value.toUpperCase() }))
+                        setErroBuscaPlacaEntrada(null)
+                      }}
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={buscarDadosPorPlacaEntrada}
+                      disabled={buscandoPlacaEntrada}
+                      className="flex-shrink-0 gap-1.5 px-3"
+                    >
+                      {buscandoPlacaEntrada
+                        ? <Loader2 size={14} className="animate-spin" />
+                        : <Search size={14} />}
+                      {buscandoPlacaEntrada ? 'Buscando…' : 'Buscar'}
+                    </Button>
+                  </div>
+                  {errosEntrada.placa && <p className="text-xs text-red-600 mt-1">{errosEntrada.placa}</p>}
+                  {erroBuscaPlacaEntrada && (
+                    <p className="flex items-center gap-1 text-xs text-amber-600 mt-1">
+                      <AlertCircle size={12} />{erroBuscaPlacaEntrada}
+                    </p>
+                  )}
+                </div>
+                <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Marca *</Label>
                   <Input placeholder="Ex: Fiat" value={dadosEntrada.marca ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, marca: e.target.value }))} />
@@ -1165,12 +1227,6 @@ export default function NovaVenda() {
                   <Input type="number" placeholder="2019" value={dadosEntrada.ano_modelo ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, ano_modelo: Number(e.target.value) }))} />
                   {errosEntrada.ano_modelo && <p className="text-xs text-red-600 mt-1">{errosEntrada.ano_modelo}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Placa *</Label>
-                  <Input placeholder="ABC1234" className="uppercase" value={dadosEntrada.placa ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, placa: e.target.value.toUpperCase() }))} />
-                  {errosEntrada.placa && <p className="text-xs text-red-600 mt-1">{errosEntrada.placa}</p>}
                 </div>
                 <div>
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Quilometragem *</Label>
