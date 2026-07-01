@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
-import { useForm, type Resolver } from 'react-hook-form'
+import { useForm, Controller, type Resolver } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useAuthStore } from '@/store/authStore'
@@ -442,6 +442,7 @@ export default function NovaVenda() {
     watch,
     setValue,
     reset,
+    control,
     formState: { errors },
   } = useForm<FormData>({ resolver: zodResolver(schema) as Resolver<FormData> })
 
@@ -762,7 +763,16 @@ export default function NovaVenda() {
             <Input {...register('quilometragem')} type="text" inputMode="numeric" placeholder="45000" />
           </Campo>
           <Campo label="Valor de Venda (R$) *" erro={errors.valor_venda?.message}>
-            <Input {...register('valor_venda')} type="text" inputMode="decimal" placeholder="0,00" />
+            <Controller
+              name="valor_venda"
+              control={control}
+              render={({ field }) => (
+                <InputMoeda
+                  value={field.value != null ? String(field.value) : ''}
+                  onChange={(v) => field.onChange(v ? parseFloat(v) : ('' as unknown as number))}
+                />
+              )}
+            />
           </Campo>
         </Secao>
 
