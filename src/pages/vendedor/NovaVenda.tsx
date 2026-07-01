@@ -33,7 +33,8 @@ import {
   type DocumentoEntrada,
   type DebitoEntrada,
 } from '@/services/entradaVeiculo'
-import { Camera, Car, AlertCircle, Plus, X, Loader2 } from 'lucide-react'
+import { Camera, Car, AlertCircle, Plus, X, Loader2, Search } from 'lucide-react'
+import { consultarPlaca } from '@/services/placaApi'
 
 // ---------------------------------------------------------------
 // Schema de validação
@@ -419,6 +420,10 @@ export default function NovaVenda() {
   // Fotos
   const [fotos, setFotos] = useState<AnexoVenda[]>([])
 
+  // Placa — busca automática
+  const [buscandoPlaca, setBuscandoPlaca] = useState(false)
+  const [erroBuscaPlaca, setErroBuscaPlaca] = useState<string | null>(null)
+
   // CEP
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [erroCep, setErroCep]         = useState<string | null>(null)
@@ -528,6 +533,28 @@ export default function NovaVenda() {
       .catch(() => setErroGlobal('Erro ao carregar dados da venda para edição.'))
       .finally(() => setCarregandoEdicao(false))
   }, [vendaId])
+
+  async function buscarDadosPorPlaca() {
+    const placa = watch('placa') ?? ''
+    if (placa.replace(/[^A-Za-z0-9]/g, '').length < 7) {
+      setErroBuscaPlaca('Informe a placa completa antes de buscar.')
+      return
+    }
+    setErroBuscaPlaca(null)
+    setBuscandoPlaca(true)
+    try {
+      const dados = await consultarPlaca(placa)
+      if (dados.marca)          setValue('marca',          dados.marca,                               { shouldValidate: true })
+      if (dados.modelo)         setValue('modelo',         dados.modelo,                              { shouldValidate: true })
+      if (dados.ano_fabricacao) setValue('ano_fabricacao', dados.ano_fabricacao as unknown as number, { shouldValidate: true })
+      if (dados.ano_modelo)     setValue('ano_modelo',     dados.ano_modelo     as unknown as number, { shouldValidate: true })
+      if (dados.cor)            setValue('cor',            dados.cor,                                 { shouldValidate: true })
+    } catch {
+      setErroBuscaPlaca('Consulta indisponível. Preencha os dados manualmente.')
+    } finally {
+      setBuscandoPlaca(false)
+    }
+  }
 
   async function buscarCep(valor: string) {
     const cep = valor.replace(/\D/g, '')
@@ -765,7 +792,36 @@ export default function NovaVenda() {
             <Input {...register('ano_modelo')} type="text" inputMode="numeric" placeholder="2021" />
           </Campo>
           <Campo label="Placa *" erro={errors.placa?.message}>
-            <Input {...register('placa')} placeholder="ABC1234" className="uppercase" />
+            <div className="flex gap-2">
+              <Input
+                {...register('placa')}
+                placeholder="ABC1234"
+                className="uppercase flex-1"
+                onChange={(e) => {
+                  e.target.value = e.target.value.toUpperCase()
+                  register('placa').onChange(e)
+                  setErroBuscaPlaca(null)
+                }}
+              />
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={buscarDadosPorPlaca}
+                disabled={buscandoPlaca}
+                className="flex-shrink-0 gap-1.5 px-3"
+              >
+                {buscandoPlaca
+                  ? <Loader2 size={14} className="animate-spin" />
+                  : <Search size={14} />}
+                {buscandoPlaca ? 'Buscando…' : 'Buscar'}
+              </Button>
+            </div>
+            {erroBuscaPlaca && (
+              <p className="flex items-center gap-1 text-xs text-amber-600 mt-1">
+                <AlertCircle size={12} />{erroBuscaPlaca}
+              </p>
+            )}
           </Campo>
           <Campo label="Quilometragem *" erro={errors.quilometragem?.message}>
             <Input {...register('quilometragem')} type="text" inputMode="numeric" placeholder="45000" />
