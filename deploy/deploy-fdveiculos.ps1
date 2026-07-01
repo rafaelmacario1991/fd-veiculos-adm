@@ -7,6 +7,9 @@ $KEY      = "$HOME\.ssh\mkreport_vps"
 $WEB_PATH = "/var/www/fdveiculos"
 $TMP_PATH = "/tmp/fdveiculos_upload"
 
+# Opcoes SSH: timeout de conexao + keep-alive para evitar travamento silencioso
+$SSH_OPTS = @("-i", $KEY, "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=5", "-o", "ServerAliveCountMax=3", "-o", "BatchMode=yes")
+
 Write-Host "[1/4] Build da aplicacao..." -ForegroundColor Cyan
 npm run build
 if ($LASTEXITCODE -ne 0) {
@@ -15,17 +18,17 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[2/4] Preparando VPS para receber os arquivos..." -ForegroundColor Cyan
-ssh -i $KEY root@$VPS "rm -rf $TMP_PATH"
+ssh @SSH_OPTS root@$VPS "rm -rf $TMP_PATH"
 
 Write-Host "[3/4] Enviando dist/ para o VPS..." -ForegroundColor Cyan
-scp -i $KEY -rq dist "root@${VPS}:${TMP_PATH}"
+scp @SSH_OPTS -rq dist "root@${VPS}:${TMP_PATH}"
 if ($LASTEXITCODE -ne 0) {
     Write-Host "Falha no upload. Abortando." -ForegroundColor Red
     exit 1
 }
 
 Write-Host "[4/4] Ativando nova versao e recarregando Nginx..." -ForegroundColor Cyan
-ssh -i $KEY root@$VPS @"
+ssh @SSH_OPTS root@$VPS @"
 rm -rf $WEB_PATH
 mv $TMP_PATH $WEB_PATH
 chown -R www-data:www-data $WEB_PATH
