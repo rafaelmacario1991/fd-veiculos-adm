@@ -318,6 +318,12 @@ export default function DetalheVenda() {
             <InfoLinha label="CPF/CNPJ" valor={venda.comprador_cpf_cnpj} />
             <InfoLinha label="Valor" valor={moeda(venda.valor_venda)} />
             <InfoLinha label="Pagamento" valor={formaLabel[venda.forma_pagamento]} />
+            {venda.data_venda && (
+              <InfoLinha label="Data da Venda" valor={new Date(venda.data_venda + 'T12:00:00').toLocaleDateString('pt-BR')} />
+            )}
+            {venda.data_prevista_entrega && (
+              <InfoLinha label="Prev. de Entrega" valor={new Date(venda.data_prevista_entrega + 'T12:00:00').toLocaleDateString('pt-BR')} />
+            )}
             {venda.veiculo_entrada && (
               <InfoLinha
                 label="Veículo entrada"

@@ -133,7 +133,7 @@ export default function QuadroVendas() {
         case 'vendedor':  va = a.users?.nome ?? '';       vb = b.users?.nome ?? '';       break
         case 'valor':     va = a.valor_venda;             vb = b.valor_venda;             break
         case 'status':    va = a.status;                  vb = b.status;                  break
-        case 'data':      va = a.criado_em;               vb = b.criado_em;               break
+        case 'data':      va = a.data_venda ?? a.criado_em; vb = b.data_venda ?? b.criado_em; break
       }
       if (va < vb) return ordemDir === 'asc' ? -1 : 1
       if (va > vb) return ordemDir === 'asc' ? 1 : -1
@@ -489,7 +489,7 @@ export default function QuadroVendas() {
                               </span>
                             </td>
                             <td className="py-3 px-4 text-gray-500 text-xs whitespace-nowrap">
-                              {format(parseISO(v.criado_em), "dd/MM/yyyy", { locale: ptBR })}
+                              {format(parseISO(v.data_venda ?? v.criado_em), "dd/MM/yyyy", { locale: ptBR })}
                             </td>
                             <td className="py-3 px-4">
                               <div className="flex items-center justify-end gap-1">

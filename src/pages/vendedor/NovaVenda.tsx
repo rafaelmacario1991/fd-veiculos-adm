@@ -68,6 +68,8 @@ const schema = z.object({
     normalizarNumero,
     z.number().positive('Valor inválido')
   ),
+  data_venda: z.string().min(1, 'Data da Venda obrigatória'),
+  data_prevista_entrega: z.string().optional(),
   comprador_nome: z.string().min(1, 'Obrigatório'),
   comprador_cpf_cnpj: z.string().min(11, 'CPF/CNPJ inválido'),
   comprador_rg: z.string().optional(),
@@ -444,7 +446,10 @@ export default function NovaVenda() {
     reset,
     control,
     formState: { errors },
-  } = useForm<FormData>({ resolver: zodResolver(schema) as Resolver<FormData> })
+  } = useForm<FormData>({
+    resolver: zodResolver(schema) as Resolver<FormData>,
+    defaultValues: { data_venda: new Date().toISOString().split('T')[0] },
+  })
 
   // ── Carrega dados existentes no modo edição ──────────────────
   useEffect(() => {
@@ -483,6 +488,8 @@ export default function NovaVenda() {
           comprador_telefone:     venda.comprador_telefone,
           comprador_email:        venda.comprador_email ?? '',
           observacoes:            venda.observacoes ?? '',
+          data_venda:             (venda as unknown as { data_venda: string | null }).data_venda ?? new Date().toISOString().split('T')[0],
+          data_prevista_entrega:  (venda as unknown as { data_prevista_entrega: string | null }).data_prevista_entrega ?? '',
         })
 
         // Formas de pagamento
@@ -670,6 +677,7 @@ export default function NovaVenda() {
         observacoes:              dados.observacoes || undefined,
         transferencia_info:       transferenciaInfo,
         ipva_info:                ipvaInfo || undefined,
+        data_prevista_entrega:    dados.data_prevista_entrega || undefined,
       }
 
       if (editando && vendaId) {
@@ -773,6 +781,12 @@ export default function NovaVenda() {
                 />
               )}
             />
+          </Campo>
+          <Campo label="Data da Venda *" erro={errors.data_venda?.message}>
+            <Input {...register('data_venda')} type="date" />
+          </Campo>
+          <Campo label="Previsão de Entrega" erro={errors.data_prevista_entrega?.message}>
+            <Input {...register('data_prevista_entrega')} type="date" />
           </Campo>
         </Secao>
 

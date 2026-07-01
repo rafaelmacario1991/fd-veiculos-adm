@@ -86,6 +86,9 @@ export interface Venda {
   observacoes?: string
   transferencia_info?: string
   ipva_info?: string
+  // Datas da negociação
+  data_venda?: string
+  data_prevista_entrega?: string
   // Metadados
   criado_em: string
   atualizado_em: string

@@ -43,6 +43,9 @@ export interface VendaListagem {
   observacoes: string | null
   transferencia_info: string | null
   ipva_info: string | null
+  // Datas da negociação
+  data_venda: string | null
+  data_prevista_entrega: string | null
   // Metadados
   criado_em: string
   atualizado_em: string
@@ -82,6 +85,8 @@ export interface DadosNovaVenda {
   observacoes?: string
   transferencia_info?: string
   ipva_info?: string
+  data_venda?: string
+  data_prevista_entrega?: string
 }
 
 export interface FiltrosVendas {
@@ -98,8 +103,8 @@ export async function listarVendasDoVendedor(vendedorId: string, filtros: Filtro
     .order('criado_em', { ascending: false })
 
   if (filtros.status) query = query.eq('status', filtros.status)
-  if (filtros.de)     query = query.gte('criado_em', filtros.de)
-  if (filtros.ate)    query = query.lte('criado_em', filtros.ate + 'T23:59:59')
+  if (filtros.de)     query = query.gte('data_venda', filtros.de)
+  if (filtros.ate)    query = query.lte('data_venda', filtros.ate)
 
   const { data, error } = await query
   if (error) throw error
@@ -157,8 +162,8 @@ export async function listarTodasVendas(filtros: FiltrosVendas = {}): Promise<Ve
     .order('criado_em', { ascending: false })
 
   if (filtros.status) query = query.eq('status', filtros.status)
-  if (filtros.de)     query = query.gte('criado_em', filtros.de)
-  if (filtros.ate)    query = query.lte('criado_em', filtros.ate + 'T23:59:59')
+  if (filtros.de)     query = query.gte('data_venda', filtros.de)
+  if (filtros.ate)    query = query.lte('data_venda', filtros.ate)
 
   const { data, error } = await query
   if (error) throw error

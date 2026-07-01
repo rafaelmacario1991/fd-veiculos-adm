@@ -138,6 +138,14 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
             <div className="col-span-2">
               <Linha label="Valor da Venda" valor={moeda(venda.valor_venda)} />
             </div>
+            <Linha
+              label="Data da Venda"
+              valor={venda.data_venda ? formatarData(venda.data_venda) : null}
+            />
+            <Linha
+              label="Prev. de Entrega"
+              valor={venda.data_prevista_entrega ? formatarData(venda.data_prevista_entrega) : null}
+            />
 
             {/* Formas de pagamento (novo formato JSON) */}
             {venda.formas_pagamento_json && venda.formas_pagamento_json.length > 0 ? (

@@ -34,6 +34,8 @@ export interface DetalheVenda {
   valor_financiado: number | null
   numero_parcelas: number | null
   observacoes: string | null
+  data_venda: string | null
+  data_prevista_entrega: string | null
   criado_em: string
   atualizado_em: string
   // Relações
