@@ -773,24 +773,6 @@ export default function NovaVenda() {
 
         {/* Dados do Veículo */}
         <Secao titulo="Dados do Veículo">
-          <Campo label="Marca *" erro={errors.marca?.message}>
-            <Input {...register('marca')} placeholder="Ex: Toyota" />
-          </Campo>
-          <Campo label="Modelo *" erro={errors.modelo?.message}>
-            <Input {...register('modelo')} placeholder="Ex: Corolla" />
-          </Campo>
-          <Campo label="Versão" erro={errors.versao?.message}>
-            <Input {...register('versao')} placeholder="Ex: XEi 2.0" />
-          </Campo>
-          <Campo label="Cor *" erro={errors.cor?.message}>
-            <Input {...register('cor')} placeholder="Ex: Prata" />
-          </Campo>
-          <Campo label="Ano Fabricação *" erro={errors.ano_fabricacao?.message}>
-            <Input {...register('ano_fabricacao')} type="text" inputMode="numeric" placeholder="2020" />
-          </Campo>
-          <Campo label="Ano Modelo *" erro={errors.ano_modelo?.message}>
-            <Input {...register('ano_modelo')} type="text" inputMode="numeric" placeholder="2021" />
-          </Campo>
           <Campo label="Placa *" erro={errors.placa?.message}>
             <div className="flex gap-2">
               <Input
@@ -822,6 +804,24 @@ export default function NovaVenda() {
                 <AlertCircle size={12} />{erroBuscaPlaca}
               </p>
             )}
+          </Campo>
+          <Campo label="Marca *" erro={errors.marca?.message}>
+            <Input {...register('marca')} placeholder="Ex: Toyota" />
+          </Campo>
+          <Campo label="Modelo *" erro={errors.modelo?.message}>
+            <Input {...register('modelo')} placeholder="Ex: Corolla" />
+          </Campo>
+          <Campo label="Versão" erro={errors.versao?.message}>
+            <Input {...register('versao')} placeholder="Ex: XEi 2.0" />
+          </Campo>
+          <Campo label="Cor *" erro={errors.cor?.message}>
+            <Input {...register('cor')} placeholder="Ex: Prata" />
+          </Campo>
+          <Campo label="Ano Fabricação *" erro={errors.ano_fabricacao?.message}>
+            <Input {...register('ano_fabricacao')} type="text" inputMode="numeric" placeholder="2020" />
+          </Campo>
+          <Campo label="Ano Modelo *" erro={errors.ano_modelo?.message}>
+            <Input {...register('ano_modelo')} type="text" inputMode="numeric" placeholder="2021" />
           </Campo>
           <Campo label="Quilometragem *" erro={errors.quilometragem?.message}>
             <Input {...register('quilometragem')} type="text" inputMode="numeric" placeholder="45000" />
