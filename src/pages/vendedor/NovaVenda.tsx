@@ -64,6 +64,12 @@ const schema = z.object({
   ano_modelo: numInt('Ano inválido').pipe(z.number().int().min(1950).max(2030, 'Ano inválido')),
   cor: z.string().min(1, 'Obrigatório'),
   placa: z.string().min(7, 'Placa inválida').max(8),
+  renavam: z.string().optional(),
+  chassi: z.string().optional(),
+  nr_motor: z.string().optional(),
+  combustivel: z.string().optional(),
+  potencia: z.string().optional(),
+  tipo_veiculo: z.string().optional(),
   quilometragem: numInt('Quilometragem inválida').pipe(z.number().int().min(0)),
   valor_venda: z.preprocess(
     normalizarNumero,
@@ -76,6 +82,7 @@ const schema = z.object({
   comprador_cpf_cnpj: z.string().min(11, 'CPF/CNPJ inválido'),
   comprador_rg: z.string().optional(),
   comprador_nascimento: z.string().optional(),
+  comprador_profissao: z.string().optional(),
   comprador_logradouro: z.string().min(1, 'Obrigatório'),
   comprador_numero: z.string().min(1, 'Obrigatório'),
   comprador_complemento: z.string().optional(),
@@ -482,12 +489,19 @@ export default function NovaVenda() {
           ano_modelo:             venda.ano_modelo as unknown as number,
           cor:                    venda.cor,
           placa:                  venda.placa,
+          renavam:                (venda as unknown as { renavam: string | null }).renavam ?? '',
+          chassi:                 (venda as unknown as { chassi: string | null }).chassi ?? '',
+          nr_motor:               (venda as unknown as { nr_motor: string | null }).nr_motor ?? '',
+          combustivel:            (venda as unknown as { combustivel: string | null }).combustivel ?? '',
+          potencia:               (venda as unknown as { potencia: string | null }).potencia ?? '',
+          tipo_veiculo:           (venda as unknown as { tipo_veiculo: string | null }).tipo_veiculo ?? '',
           quilometragem:          venda.quilometragem as unknown as number,
           valor_venda:            venda.valor_venda as unknown as number,
           comprador_nome:         venda.comprador_nome,
           comprador_cpf_cnpj:     venda.comprador_cpf_cnpj,
           comprador_rg:           venda.comprador_rg ?? '',
           comprador_nascimento:   venda.comprador_nascimento ?? '',
+          comprador_profissao:    (venda as unknown as { comprador_profissao: string | null }).comprador_profissao ?? '',
           comprador_logradouro:   venda.comprador_logradouro,
           comprador_numero:       venda.comprador_numero,
           comprador_complemento:  venda.comprador_complemento ?? '',
@@ -555,6 +569,11 @@ export default function NovaVenda() {
       if (dados.ano_fabricacao) setValue('ano_fabricacao', dados.ano_fabricacao as unknown as number, { shouldValidate: true })
       if (dados.ano_modelo)     setValue('ano_modelo',     dados.ano_modelo     as unknown as number, { shouldValidate: true })
       if (dados.cor)            setValue('cor',            dados.cor,                                 { shouldValidate: true })
+      if (dados.chassi)         setValue('chassi',         dados.chassi,                              { shouldValidate: true })
+      if (dados.combustivel)    setValue('combustivel',    dados.combustivel,                         { shouldValidate: true })
+      if (dados.nr_motor)       setValue('nr_motor',       dados.nr_motor,                            { shouldValidate: true })
+      if (dados.tipo_veiculo)   setValue('tipo_veiculo',   dados.tipo_veiculo,                        { shouldValidate: true })
+      if (dados.potencia)       setValue('potencia',       dados.potencia,                            { shouldValidate: true })
     } catch {
       setErroBuscaPlaca('Consulta indisponível. Preencha os dados manualmente.')
     } finally {
@@ -574,11 +593,12 @@ export default function NovaVenda() {
       const dados = await consultarPlaca(placa)
       setDadosEntrada((p) => ({
         ...p,
-        ...(dados.marca          ? { marca: dados.marca }                                  : {}),
-        ...(dados.modelo         ? { modelo: dados.modelo }                                : {}),
-        ...(dados.ano_fabricacao ? { ano_fabricacao: dados.ano_fabricacao }                : {}),
-        ...(dados.ano_modelo     ? { ano_modelo: dados.ano_modelo }                        : {}),
-        ...(dados.cor            ? { cor: dados.cor }                                      : {}),
+        ...(dados.marca          ? { marca: dados.marca }               : {}),
+        ...(dados.modelo         ? { modelo: dados.modelo }             : {}),
+        ...(dados.ano_fabricacao ? { ano_fabricacao: dados.ano_fabricacao } : {}),
+        ...(dados.ano_modelo     ? { ano_modelo: dados.ano_modelo }     : {}),
+        ...(dados.cor            ? { cor: dados.cor }                   : {}),
+        ...(dados.chassi         ? { chassi: dados.chassi }             : {}),
       }))
     } catch {
       setErroBuscaPlacaEntrada('Consulta indisponível. Preencha os dados manualmente.')
@@ -855,6 +875,24 @@ export default function NovaVenda() {
           <Campo label="Ano Modelo *" erro={errors.ano_modelo?.message}>
             <Input {...register('ano_modelo')} type="text" inputMode="numeric" placeholder="2021" />
           </Campo>
+          <Campo label="Renavam" erro={errors.renavam?.message}>
+            <Input {...register('renavam')} placeholder="00000000000" />
+          </Campo>
+          <Campo label="Chassi" erro={errors.chassi?.message}>
+            <Input {...register('chassi')} placeholder="9BWZZZ377VT004251" className="uppercase" />
+          </Campo>
+          <Campo label="Nr. Motor" erro={errors.nr_motor?.message}>
+            <Input {...register('nr_motor')} placeholder="Preenchido automaticamente" />
+          </Campo>
+          <Campo label="Combustível" erro={errors.combustivel?.message}>
+            <Input {...register('combustivel')} placeholder="Preenchido automaticamente" />
+          </Campo>
+          <Campo label="Potência (cv)" erro={errors.potencia?.message}>
+            <Input {...register('potencia')} placeholder="Ex: 116" />
+          </Campo>
+          <Campo label="Tipo de Veículo" erro={errors.tipo_veiculo?.message}>
+            <Input {...register('tipo_veiculo')} placeholder="Ex: Automóvel" />
+          </Campo>
           <Campo label="Quilometragem *" erro={errors.quilometragem?.message}>
             <Input {...register('quilometragem')} type="text" inputMode="numeric" placeholder="45000" />
           </Campo>
@@ -929,6 +967,9 @@ export default function NovaVenda() {
           </Campo>
           <Campo label="Data de Nascimento" erro={errors.comprador_nascimento?.message}>
             <Input {...register('comprador_nascimento')} type="date" />
+          </Campo>
+          <Campo label="Profissão" erro={errors.comprador_profissao?.message}>
+            <Input {...register('comprador_profissao')} placeholder="Ex: Empresário" />
           </Campo>
           <Campo label="Telefone *" erro={errors.comprador_telefone?.message}>
             <Input {...register('comprador_telefone')} placeholder="(81) 99999-9999" />
@@ -1247,6 +1288,16 @@ export default function NovaVenda() {
                   <Input placeholder="Nome completo" value={dadosEntrada.proprietario_nome ?? ''}
                     onChange={(e) => setDadosEntrada((p) => ({ ...p, proprietario_nome: e.target.value }))} />
                   {errosEntrada.proprietario_nome && <p className="text-xs text-red-600 mt-1">{errosEntrada.proprietario_nome}</p>}
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">CPF do Proprietário</Label>
+                  <Input placeholder="000.000.000-00" value={dadosEntrada.proprietario_cpf ?? ''}
+                    onChange={(e) => setDadosEntrada((p) => ({ ...p, proprietario_cpf: e.target.value }))} />
+                </div>
+                <div>
+                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Renavam</Label>
+                  <Input placeholder="00000000000" value={dadosEntrada.renavam ?? ''}
+                    onChange={(e) => setDadosEntrada((p) => ({ ...p, renavam: e.target.value }))} />
                 </div>
                 <div className="col-span-2">
                   <Label className="text-xs font-medium text-gray-700 mb-1 block">Observações</Label>

@@ -18,6 +18,7 @@ export interface DadosEntradaVeiculo {
   quilometragem?: number
   valor_estimado?: number
   proprietario_nome?: string
+  proprietario_cpf?: string
   observacoes?: string
   debitos?: DebitoEntrada[]
 }

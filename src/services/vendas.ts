@@ -66,6 +66,10 @@ export interface DadosNovaVenda {
   placa: string
   renavam?: string
   chassi?: string
+  nr_motor?: string
+  combustivel?: string
+  potencia?: string
+  tipo_veiculo?: string
   quilometragem: number
   valor_venda: number
   comprador_nome: string
@@ -81,6 +85,7 @@ export interface DadosNovaVenda {
   comprador_cep: string
   comprador_telefone: string
   comprador_email?: string
+  comprador_profissao?: string
   canal_venda?: string
   forma_pagamento: FormaPagamento
   formas_pagamento_json: MetodoPagamentoItem[]

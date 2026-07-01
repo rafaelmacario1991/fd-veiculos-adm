@@ -5,6 +5,10 @@ export interface DadosVeiculoPlaca {
   ano_modelo?: number
   cor?: string
   chassi?: string
+  combustivel?: string
+  nr_motor?: string
+  tipo_veiculo?: string
+  potencia?: string
 }
 
 interface RespostaConsultarPlaca {
@@ -12,6 +16,7 @@ interface RespostaConsultarPlaca {
   dados?: {
     informacoes_veiculo?: {
       dados_veiculo?: Record<string, string>
+      dados_tecnicos?: Record<string, string>
     }
   }
   message?: string
@@ -32,6 +37,7 @@ export async function consultarPlaca(placa: string): Promise<DadosVeiculoPlaca> 
   }
 
   const v = body.dados?.informacoes_veiculo?.dados_veiculo ?? {}
+  const t = body.dados?.informacoes_veiculo?.dados_tecnicos ?? {}
 
   // modelo retorna como "MARCA/MODELO VERSAO" — extraímos só o que vem após "/"
   const modeloRaw = v['modelo'] ?? ''
@@ -40,11 +46,15 @@ export async function consultarPlaca(placa: string): Promise<DadosVeiculoPlaca> 
     : modeloRaw.trim()
 
   return {
-    marca:          v['marca']?.trim()        || undefined,
-    modelo:         modeloLimpo               || undefined,
+    marca:        v['marca']?.trim()          || undefined,
+    modelo:       modeloLimpo                 || undefined,
     ano_fabricacao: v['ano_fabricacao']       ? Number(v['ano_fabricacao'])  : undefined,
-    ano_modelo:     v['ano_modelo']           ? Number(v['ano_modelo'])      : undefined,
-    cor:            v['cor']?.trim()          || undefined,
-    chassi:         v['chassi']?.trim()       || undefined,
+    ano_modelo:   v['ano_modelo']             ? Number(v['ano_modelo'])      : undefined,
+    cor:          v['cor']?.trim()            || undefined,
+    chassi:       v['chassi']?.trim()         || undefined,
+    combustivel:  v['combustivel']?.trim()    || undefined,
+    nr_motor:     t['numero_motor']?.trim()   || undefined,
+    tipo_veiculo: t['tipo_veiculo']?.trim()   || undefined,
+    potencia:     t['potencia']?.trim()       || undefined,
   }
 }

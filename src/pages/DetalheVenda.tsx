@@ -7,14 +7,24 @@ import {
 } from '@/services/supervisor'
 import { useAuthStore } from '@/store/authStore'
 import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
+import ContratoVenda from '@/components/vendas/ContratoVenda'
 import type { VendaListagem } from '@/services/vendas'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
-  ArrowLeft, Eye, Trash2,
+  ArrowLeft, Eye, Trash2, FileText, Printer, X, AlertCircle,
   CheckCircle2, Clock, AlertTriangle, Circle,
 } from 'lucide-react'
+
+// Campos obrigatórios para emissão do contrato
+const CAMPOS_CONTRATO: Array<{ campo: keyof DetalheVenda; label: string; dica: string }> = [
+  { campo: 'renavam',     label: 'Renavam',         dica: 'Edite a venda e informe o Renavam do veículo' },
+  { campo: 'chassi',      label: 'Chassi',           dica: 'Busque pela placa — geralmente preenchido automaticamente' },
+  { campo: 'nr_motor',    label: 'Nr. Motor',        dica: 'Busque pela placa — geralmente preenchido automaticamente' },
+  { campo: 'combustivel', label: 'Combustível',      dica: 'Busque pela placa — geralmente preenchido automaticamente' },
+  { campo: 'tipo_veiculo',label: 'Tipo de Veículo',  dica: 'Busque pela placa — geralmente preenchido automaticamente' },
+]
 
 // ---------------------------------------------------------------
 // Helpers
@@ -146,6 +156,9 @@ export default function DetalheVenda() {
   const [venda, setVenda] = useState<DetalheVenda | null>(null)
   const [carregando, setCarregando] = useState(true)
   const [mostrarResumo, setMostrarResumo] = useState(false)
+  const [mostrarContrato, setMostrarContrato] = useState(false)
+  const [camposFaltantes, setCamposFaltantes] = useState<typeof CAMPOS_CONTRATO>([])
+  const [modalValidacao, setModalValidacao] = useState(false)
 
   // Exclusão do processo inteiro
   const [confirmarExclusao, setConfirmarExclusao] = useState(false)
@@ -254,6 +267,16 @@ export default function DetalheVenda() {
     enviado: 'No despachante', pendencia: 'Com pendência', concluido: 'Concluído',
   }
 
+  function abrirContrato() {
+    const faltantes = CAMPOS_CONTRATO.filter((c) => !venda![c.campo])
+    if (faltantes.length > 0) {
+      setCamposFaltantes(faltantes)
+      setModalValidacao(true)
+    } else {
+      setMostrarContrato(true)
+    }
+  }
+
   return (
     <div className="flex flex-col flex-1">
       <Header
@@ -264,6 +287,10 @@ export default function DetalheVenda() {
             <Button size="sm" variant="outline" onClick={() => navigate(-1)}>
               <ArrowLeft size={13} className="mr-1.5" />
               Voltar
+            </Button>
+            <Button size="sm" variant="outline" onClick={abrirContrato}>
+              <FileText size={13} className="mr-1.5" />
+              Gerar Contrato
             </Button>
             <Button size="sm" onClick={() => setMostrarResumo(true)}>
               <Eye size={13} className="mr-1.5" />
@@ -533,6 +560,84 @@ export default function DetalheVenda() {
         venda={mostrarResumo ? (venda as unknown as VendaListagem) : null}
         onFechar={() => setMostrarResumo(false)}
       />
+
+      {/* Modal de validação — campos faltantes para o contrato */}
+      {modalValidacao && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 print-hidden">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-start gap-3 mb-4">
+              <AlertCircle size={20} className="text-amber-500 flex-shrink-0 mt-0.5" />
+              <div>
+                <h3 className="font-semibold text-gray-900 text-sm">Campos necessários para o contrato</h3>
+                <p className="text-xs text-gray-500 mt-1">
+                  Os seguintes campos precisam ser preenchidos antes de gerar o contrato:
+                </p>
+              </div>
+            </div>
+            <ul className="space-y-2 mb-5">
+              {camposFaltantes.map((c) => (
+                <li key={c.campo} className="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+                  <span className="font-medium text-amber-800 text-xs">{c.label}</span>
+                  <p className="text-xs text-amber-600 mt-0.5">{c.dica}</p>
+                </li>
+              ))}
+            </ul>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1"
+                onClick={() => setModalValidacao(false)}
+              >
+                Fechar
+              </Button>
+              <Button
+                size="sm"
+                className="flex-1"
+                onClick={() => {
+                  setModalValidacao(false)
+                  navigate(`/vendedor/editar-venda/${venda.id}`)
+                }}
+              >
+                Editar venda
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Overlay do contrato — impressão */}
+      {mostrarContrato && (
+        <div className="fixed inset-0 z-50 bg-gray-100 overflow-auto print-hidden-overlay">
+          {/* Barra de ações — some no print */}
+          <div className="no-print sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm print-hidden">
+            <div className="flex items-center gap-2">
+              <FileText size={16} className="text-blue-700" />
+              <span className="font-semibold text-sm text-gray-800">Contrato de Venda</span>
+              <span className="text-xs text-gray-400">— {venda.placa.toUpperCase()} · {venda.comprador_nome}</span>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => window.print()}
+              >
+                <Printer size={13} className="mr-1.5" />
+                Imprimir / Salvar PDF
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => setMostrarContrato(false)}
+              >
+                <X size={13} className="mr-1.5" />
+                Fechar
+              </Button>
+            </div>
+          </div>
+          {/* Conteúdo do contrato */}
+          <ContratoVenda venda={venda} />
+        </div>
+      )}
     </div>
   )
 }

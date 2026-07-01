@@ -11,8 +11,12 @@ export interface DetalheVenda {
   ano_modelo: number
   cor: string
   placa: string
-  renavam: string
-  chassi: string
+  renavam: string | null
+  chassi: string | null
+  nr_motor: string | null
+  combustivel: string | null
+  potencia: string | null
+  tipo_veiculo: string | null
   quilometragem: number
   valor_venda: number
   comprador_nome: string
@@ -28,12 +32,16 @@ export interface DetalheVenda {
   comprador_cep: string
   comprador_telefone: string
   comprador_email: string | null
+  comprador_profissao: string | null
   canal_venda: string | null
   forma_pagamento: string
+  formas_pagamento_json: Record<string, unknown>[] | null
   banco_financeira: string | null
   valor_entrada: number | null
   valor_financiado: number | null
   numero_parcelas: number | null
+  transferencia_info: string | null
+  ipva_info: string | null
   observacoes: string | null
   data_venda: string | null
   data_prevista_entrega: string | null
@@ -95,9 +103,13 @@ export interface VeiculoEntradaDetalhe {
   ano_modelo: number
   cor: string
   placa: string
+  renavam: string | null
+  chassi: string | null
   quilometragem: number | null
   valor_estimado: number | null
   proprietario_nome: string | null
+  proprietario_cpf: string | null
+  debitos_json: Array<{ descricao: string; valor: number }> | null
 }
 
 export async function buscarDetalheVenda(saleId: string): Promise<DetalheVenda | null> {
