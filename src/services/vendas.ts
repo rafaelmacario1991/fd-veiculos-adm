@@ -33,6 +33,7 @@ export interface VendaListagem {
   comprador_cep: string
   comprador_telefone: string
   comprador_email: string | null
+  canal_venda: string | null
   // Negociação
   forma_pagamento: FormaPagamento
   formas_pagamento_json: MetodoPagamentoItem[] | null
@@ -80,6 +81,7 @@ export interface DadosNovaVenda {
   comprador_cep: string
   comprador_telefone: string
   comprador_email?: string
+  canal_venda?: string
   forma_pagamento: FormaPagamento
   formas_pagamento_json: MetodoPagamentoItem[]
   observacoes?: string

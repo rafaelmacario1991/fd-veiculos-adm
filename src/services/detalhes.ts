@@ -28,6 +28,7 @@ export interface DetalheVenda {
   comprador_cep: string
   comprador_telefone: string
   comprador_email: string | null
+  canal_venda: string | null
   forma_pagamento: string
   banco_financeira: string | null
   valor_entrada: number | null

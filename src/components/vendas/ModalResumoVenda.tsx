@@ -112,7 +112,8 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
           <hr className="border-gray-100" />
 
           {/* Comprador */}
-          <Secao icone={<User size={13} />} titulo="Comprador">
+          <Secao icone={<User size={13} />} titulo="Cliente">
+            {venda.canal_venda && <Linha label="Canal de Venda" valor={venda.canal_venda} />}
             <Linha label="Nome" valor={venda.comprador_nome} />
             <Linha label="CPF / CNPJ" valor={venda.comprador_cpf_cnpj} />
             <Linha label="RG" valor={venda.comprador_rg} />

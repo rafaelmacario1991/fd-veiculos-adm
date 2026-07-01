@@ -71,6 +71,7 @@ const schema = z.object({
   ),
   data_venda: z.string().min(1, 'Data da Venda obrigatória'),
   data_prevista_entrega: z.string().optional(),
+  canal_venda: z.string().optional(),
   comprador_nome: z.string().min(1, 'Obrigatório'),
   comprador_cpf_cnpj: z.string().min(11, 'CPF/CNPJ inválido'),
   comprador_rg: z.string().optional(),
@@ -492,6 +493,7 @@ export default function NovaVenda() {
           comprador_cep:          venda.comprador_cep,
           comprador_telefone:     venda.comprador_telefone,
           comprador_email:        venda.comprador_email ?? '',
+          canal_venda:            (venda as unknown as { canal_venda: string | null }).canal_venda ?? '',
           observacoes:            venda.observacoes ?? '',
           data_venda:             (venda as unknown as { data_venda: string | null }).data_venda ?? new Date().toISOString().split('T')[0],
           data_prevista_entrega:  (venda as unknown as { data_prevista_entrega: string | null }).data_prevista_entrega ?? '',
@@ -699,6 +701,7 @@ export default function NovaVenda() {
         comprador_nascimento:     dados.comprador_nascimento || undefined,
         comprador_complemento:    dados.comprador_complemento || undefined,
         comprador_email:          dados.comprador_email || undefined,
+        canal_venda:              dados.canal_venda || undefined,
         forma_pagamento:          formaPagamentoResumo,
         formas_pagamento_json:    formasPagamentoJson,
         observacoes:              dados.observacoes || undefined,
@@ -867,8 +870,25 @@ export default function NovaVenda() {
           <UploadFotos saleId={saleId} fotos={fotos} onChange={setFotos} />
         </div>
 
-        {/* Dados do Comprador */}
-        <Secao titulo="Dados do Comprador">
+        {/* Dados do Cliente */}
+        <Secao titulo="Dados do Cliente">
+          <Campo label="Canal de Venda" erro={errors.canal_venda?.message}>
+            <Controller
+              name="canal_venda"
+              control={control}
+              render={({ field }) => (
+                <Select value={field.value ?? ''} onValueChange={field.onChange}>
+                  <SelectTrigger><SelectValue placeholder="Selecione..." /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="Porta">Porta</SelectItem>
+                    <SelectItem value="Lead">Lead</SelectItem>
+                    <SelectItem value="Indicação">Indicação</SelectItem>
+                    <SelectItem value="Cliente Vendedor">Cliente Vendedor</SelectItem>
+                  </SelectContent>
+                </Select>
+              )}
+            />
+          </Campo>
           <Campo label="Nome completo *" erro={errors.comprador_nome?.message} colSpan="full">
             <Input {...register('comprador_nome')} placeholder="Nome do comprador" />
           </Campo>

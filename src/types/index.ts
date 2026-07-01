@@ -77,6 +77,7 @@ export interface Venda {
   comprador_cep: string
   comprador_telefone: string
   comprador_email?: string
+  canal_venda?: string
   // Dados da negociação
   forma_pagamento: FormaPagamento
   banco_financeira?: string

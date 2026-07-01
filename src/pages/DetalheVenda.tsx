@@ -314,6 +314,7 @@ export default function DetalheVenda() {
             estado="concluido"
             data={fmtData(venda.criado_em)}
           >
+            {venda.canal_venda && <InfoLinha label="Canal de Venda" valor={venda.canal_venda} />}
             <InfoLinha label="Comprador" valor={venda.comprador_nome} />
             <InfoLinha label="CPF/CNPJ" valor={venda.comprador_cpf_cnpj} />
             <InfoLinha label="Valor" valor={moeda(venda.valor_venda)} />
