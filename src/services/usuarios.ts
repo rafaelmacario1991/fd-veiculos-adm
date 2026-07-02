@@ -72,3 +72,11 @@ export async function excluirUsuario(userId: string): Promise<void> {
   })
   if (error) throw error
 }
+
+export async function atualizarUnidade(userId: string, unidade: string): Promise<void> {
+  const { error } = await supabase.rpc('atualizar_unidade_usuario', {
+    p_user_id: userId,
+    p_unidade: unidade,
+  })
+  if (error) throw error
+}

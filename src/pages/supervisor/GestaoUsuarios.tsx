@@ -5,7 +5,7 @@ import { zodResolver } from '@hookform/resolvers/zod'
 import { useRequererPerfil } from '@/hooks/useAuth'
 import {
   listarUsuarios, criarUsuario, atualizarPerfis, alternarAtivo,
-  alterarDadosUsuario, alterarSenhaUsuario, excluirUsuario,
+  alterarDadosUsuario, alterarSenhaUsuario, excluirUsuario, atualizarUnidade,
   type UsuarioComPerfis,
 } from '@/services/usuarios'
 import Header from '@/components/layout/Header'
@@ -29,7 +29,7 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { AlertTriangle, Pencil, Trash2, UserPlus } from 'lucide-react'
-import type { Perfil } from '@/types'
+import type { Perfil, Unidade } from '@/types'
 
 const PERFIS: { valor: Perfil; label: string }[] = [
   { valor: 'vendedor',      label: 'Vendedor' },
@@ -59,6 +59,10 @@ export default function GestaoUsuarios() {
   const [enviando, setEnviando]                     = useState(false)
   const [erro, setErro]                             = useState<string | null>(null)
 
+  // Unidade (apenas para perfil vendedor)
+  const [unidadeNovo, setUnidadeNovo]     = useState<Unidade>('fd_veiculos')
+  const [unidadeEditando, setUnidadeEditando] = useState<Unidade>('fd_veiculos')
+
   // Campos do modo edição
   const [nomeEditando, setNomeEditando]           = useState('')
   const [novaSenha, setNovaSenha]                 = useState('')
@@ -82,6 +86,7 @@ export default function GestaoUsuarios() {
   function abrirNovoUsuario() {
     setUsuarioEditando(null)
     setPerfisSelecionados([])
+    setUnidadeNovo('fd_veiculos')
     setErro(null)
     reset()
     setDialogAberto(true)
@@ -91,6 +96,7 @@ export default function GestaoUsuarios() {
     setUsuarioEditando(usuario)
     setNomeEditando(usuario.nome)
     setPerfisSelecionados(usuario.user_roles.map((r) => r.perfil))
+    setUnidadeEditando((usuario.unidade as Unidade | undefined) ?? 'fd_veiculos')
     setNovaSenha('')
     setConfirmandoExclusao(false)
     setErro(null)
@@ -108,7 +114,10 @@ export default function GestaoUsuarios() {
     setEnviando(true)
     setErro(null)
     try {
-      await criarUsuario(dados.nome, dados.email, dados.senha, perfisSelecionados)
+      const novoId = await criarUsuario(dados.nome, dados.email, dados.senha, perfisSelecionados)
+      if (perfisSelecionados.includes('vendedor')) {
+        await atualizarUnidade(novoId, unidadeNovo)
+      }
       setDialogAberto(false)
       await carregar()
     } catch {
@@ -132,6 +141,7 @@ export default function GestaoUsuarios() {
         atualizarPerfis(usuarioEditando.id, perfisSelecionados),
       ]
       if (novaSenha) tarefas.push(alterarSenhaUsuario(usuarioEditando.id, novaSenha))
+      if (perfisSelecionados.includes('vendedor')) tarefas.push(atualizarUnidade(usuarioEditando.id, unidadeEditando))
       await Promise.all(tarefas)
       setDialogAberto(false)
       await carregar()
@@ -204,6 +214,15 @@ export default function GestaoUsuarios() {
                             {r.perfil}
                           </Badge>
                         ))}
+                        {u.user_roles.some((r) => r.perfil === 'vendedor') && u.unidade && (
+                          <Badge className={`text-xs px-1.5 py-0 border-0 rounded-full ${
+                            u.unidade === 'fd_motos'
+                              ? 'bg-red-50 text-red-700'
+                              : 'bg-blue-50 text-blue-800'
+                          }`}>
+                            {u.unidade === 'fd_motos' ? 'FD Motos' : 'FD Veículos'}
+                          </Badge>
+                        )}
                       </div>
                     </TableCell>
                     <TableCell>
@@ -293,6 +312,32 @@ export default function GestaoUsuarios() {
                 ))}
               </div>
             </div>
+
+            {/* Unidade — só aparece quando vendedor está selecionado */}
+            {perfisSelecionados.includes('vendedor') && (
+              <div>
+                <Label className="text-xs font-medium block mb-2">Unidade *</Label>
+                <div className="flex gap-2">
+                  {(['fd_veiculos', 'fd_motos'] as Unidade[]).map((u) => {
+                    const ativo = (usuarioEditando ? unidadeEditando : unidadeNovo) === u
+                    return (
+                      <button
+                        key={u}
+                        type="button"
+                        onClick={() => usuarioEditando ? setUnidadeEditando(u) : setUnidadeNovo(u)}
+                        className={`flex-1 text-sm py-1.5 rounded-lg border transition-colors ${
+                          ativo
+                            ? u === 'fd_motos' ? 'bg-red-600 text-white border-red-600' : 'bg-blue-600 text-white border-blue-600'
+                            : 'border-gray-200 text-gray-600 hover:border-blue-300'
+                        }`}
+                      >
+                        {u === 'fd_motos' ? 'FD Motos' : 'FD Veículos'}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )}
 
             {/* ── Editar: nova senha (opcional) ── */}
             {usuarioEditando && (

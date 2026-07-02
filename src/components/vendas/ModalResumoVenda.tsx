@@ -101,6 +101,15 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
                 Vendedor: {venda.users.nome}
               </span>
             )}
+            {venda.unidade && (
+              <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                venda.unidade === 'fd_motos'
+                  ? 'bg-red-50 text-red-700'
+                  : 'bg-blue-50 text-blue-800'
+              }`}>
+                {venda.unidade === 'fd_motos' ? 'FD Motos' : 'FD Veículos'}
+              </span>
+            )}
           </div>
         </DialogHeader>
 

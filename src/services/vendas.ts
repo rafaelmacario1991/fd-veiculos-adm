@@ -51,6 +51,7 @@ export interface VendaListagem {
   // Metadados
   criado_em: string
   atualizado_em: string
+  unidade: string
   seller_pendencies: PendenciaVendedor[]
   sector_activities: AtividadeSetor[]
   // Join
@@ -96,12 +97,14 @@ export interface DadosNovaVenda {
   troco?: number
   data_venda?: string
   data_prevista_entrega?: string
+  unidade?: string
 }
 
 export interface FiltrosVendas {
   de?: string
   ate?: string
   status?: string
+  unidade?: string
 }
 
 export async function listarVendasDoVendedor(vendedorId: string, filtros: FiltrosVendas = {}): Promise<VendaListagem[]> {
@@ -111,9 +114,10 @@ export async function listarVendasDoVendedor(vendedorId: string, filtros: Filtro
     .eq('vendedor_id', vendedorId)
     .order('criado_em', { ascending: false })
 
-  if (filtros.status) query = query.eq('status', filtros.status)
-  if (filtros.de)     query = query.gte('data_venda', filtros.de)
-  if (filtros.ate)    query = query.lte('data_venda', filtros.ate)
+  if (filtros.status)  query = query.eq('status', filtros.status)
+  if (filtros.de)      query = query.gte('data_venda', filtros.de)
+  if (filtros.ate)     query = query.lte('data_venda', filtros.ate)
+  if (filtros.unidade) query = query.eq('unidade', filtros.unidade)
 
   const { data, error } = await query
   if (error) throw error
@@ -170,9 +174,10 @@ export async function listarTodasVendas(filtros: FiltrosVendas = {}): Promise<Ve
     .select('*, seller_pendencies(*), sector_activities(*), users!vendedor_id(nome)')
     .order('criado_em', { ascending: false })
 
-  if (filtros.status) query = query.eq('status', filtros.status)
-  if (filtros.de)     query = query.gte('data_venda', filtros.de)
-  if (filtros.ate)    query = query.lte('data_venda', filtros.ate)
+  if (filtros.status)  query = query.eq('status', filtros.status)
+  if (filtros.de)      query = query.gte('data_venda', filtros.de)
+  if (filtros.ate)     query = query.lte('data_venda', filtros.ate)
+  if (filtros.unidade) query = query.eq('unidade', filtros.unidade)
 
   const { data, error } = await query
   if (error) throw error

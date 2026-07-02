@@ -4,6 +4,7 @@ export interface FiltrosQuadro {
   de: string
   ate: string
   vendedorId?: string
+  unidade?: string
 }
 
 export interface VendaAnalytics {
@@ -33,17 +34,18 @@ export interface Vendedor {
   nome: string
 }
 
-export async function listarVendedores(): Promise<Vendedor[]> {
+export async function listarVendedores(unidade?: string): Promise<Vendedor[]> {
   const { data } = await supabase
     .from('user_roles')
-    .select('user_id, users!user_roles_user_id_fkey(id, nome)')
+    .select('user_id, users!user_roles_user_id_fkey(id, nome, unidade)')
     .eq('perfil', 'vendedor')
 
   const vistos = new Set<string>()
   const lista: Vendedor[] = []
   for (const r of data ?? []) {
-    const u = (r as unknown as { users: { id: string; nome: string } }).users
+    const u = (r as unknown as { users: { id: string; nome: string; unidade: string | null } }).users
     if (u && !vistos.has(u.id)) {
+      if (unidade && u.unidade !== unidade) continue
       vistos.add(u.id)
       lista.push({ id: u.id, nome: u.nome })
     }
@@ -62,6 +64,7 @@ export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQ
     .order('criado_em', { ascending: true })
 
   if (filtros.vendedorId) query = query.eq('vendedor_id', filtros.vendedorId)
+  if (filtros.unidade)   query = query.eq('unidade', filtros.unidade)
 
   const { data, error } = await query
   if (error) throw error

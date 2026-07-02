@@ -209,12 +209,21 @@ export function CartaoSetor({
     }`}>
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <p className={`font-semibold text-sm ${concluida ? 'text-gray-500' : 'text-gray-900'}`}>
               {v.marca} {v.modelo} {v.ano_modelo}
             </p>
             <span className="text-gray-400 text-xs">·</span>
             <span className="text-xs text-gray-500 font-mono uppercase">{v.placa}</span>
+            {v.unidade && (
+              <span className={`text-xs px-1.5 py-0.5 rounded-full border ${
+                v.unidade === 'fd_motos'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}>
+                {v.unidade === 'fd_motos' ? 'FD Motos' : 'FD Veículos'}
+              </span>
+            )}
           </div>
           <p className="text-sm text-gray-600 mt-0.5">{v.comprador_nome}</p>
           <p className="text-xs text-gray-400 mt-1">

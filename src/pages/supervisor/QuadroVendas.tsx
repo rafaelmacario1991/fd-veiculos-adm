@@ -73,6 +73,7 @@ export default function QuadroVendas() {
   const [ate, setAte] = useState(hoje)
   const [vendedorId, setVendedorId] = useState('')
   const [vendedores, setVendedores] = useState<Vendedor[]>([])
+  const [unidade, setUnidade] = useState<'todas' | 'fd_veiculos' | 'fd_motos'>('todas')
 
   // Aba análise
   const [dados, setDados] = useState<ResumoQuadro>(RESUMO_ZERO)
@@ -88,26 +89,27 @@ export default function QuadroVendas() {
   const [ordemDir, setOrdemDir]       = useState<Direcao>('desc')
 
   useEffect(() => {
-    listarVendedores().then(setVendedores)
-  }, [])
+    listarVendedores(unidade !== 'todas' ? unidade : undefined).then(setVendedores)
+    setVendedorId('')
+  }, [unidade])
 
   useEffect(() => {
     if (aba !== 'analise') return
     setCarregandoAnalise(true)
-    buscarDadosQuadro({ de, ate, vendedorId: vendedorId || undefined })
+    buscarDadosQuadro({ de, ate, vendedorId: vendedorId || undefined, unidade: unidade !== 'todas' ? unidade : undefined })
       .then(setDados)
       .catch(console.error)
       .finally(() => setCarregandoAnalise(false))
-  }, [de, ate, vendedorId, aba])
+  }, [de, ate, vendedorId, aba, unidade])
 
   useEffect(() => {
     if (aba !== 'lista') return
     setCarregandoLista(true)
-    listarTodasVendas({ de, ate })
+    listarTodasVendas({ de, ate, unidade: unidade !== 'todas' ? unidade : undefined })
       .then(setVendas)
       .catch(console.error)
       .finally(() => setCarregandoLista(false))
-  }, [de, ate, aba])
+  }, [de, ate, aba, unidade])
 
   const diasLegenda = dados.porDia.map((d) => ({
     ...d,
@@ -184,6 +186,29 @@ export default function QuadroVendas() {
               }`}
             >
               {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Filtro de unidade */}
+        <div className="flex items-center gap-1 bg-gray-100 rounded-xl p-1 w-fit">
+          {([
+            { id: 'todas',       label: 'Todas as Unidades' },
+            { id: 'fd_veiculos', label: 'FD Veículos' },
+            { id: 'fd_motos',    label: 'FD Motos' },
+          ] as const).map(({ id, label }) => (
+            <button
+              key={id}
+              onClick={() => setUnidade(id)}
+              className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                unidade === id
+                  ? id === 'fd_motos'
+                    ? 'bg-red-600 text-white shadow-sm'
+                    : 'bg-white text-gray-900 shadow-sm'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
               {label}
             </button>
           ))}

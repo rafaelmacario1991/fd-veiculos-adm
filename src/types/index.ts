@@ -10,6 +10,8 @@ export type Perfil =
   | 'transferencia'
   | 'supervisor'
 
+export type Unidade = 'fd_veiculos' | 'fd_motos'
+
 export type StatusVenda = 'iniciada' | 'pendencia_vendedor' | 'concluida' | 'cancelada'
 
 export type FormaPagamento = string
@@ -45,6 +47,7 @@ export interface Usuario {
   avatar_url?: string
   criado_em: string
   perfis: Perfil[]
+  unidade?: Unidade
 }
 
 export interface Venda {

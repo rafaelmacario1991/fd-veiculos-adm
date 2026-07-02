@@ -34,8 +34,9 @@ import {
   type DocumentoEntrada,
   type DebitoEntrada,
 } from '@/services/entradaVeiculo'
-import { Camera, Car, AlertCircle, Plus, X, Loader2, Search } from 'lucide-react'
+import { Camera, Car, AlertCircle, Plus, X, Loader2, Search, Building2 } from 'lucide-react'
 import { consultarPlaca } from '@/services/placaApi'
+import type { Unidade } from '@/types'
 
 // ---------------------------------------------------------------
 // Veículo de entrada — tipos e helpers
@@ -442,10 +443,11 @@ export default function NovaVenda() {
   const { id: vendaId } = useParams<{ id: string }>()
   const editando = !!vendaId
 
-  const { usuario } = useAuthStore()
+  const { usuario, temPerfil } = useAuthStore()
   const { carregar } = useVendasStore()
   const navigate = useNavigate()
   const [enviando, setEnviando] = useState(false)
+  const [unidade, setUnidade] = useState<Unidade>(() => (usuario?.unidade as Unidade | undefined) ?? 'fd_veiculos')
   const [erroGlobal, setErroGlobal] = useState<string | null>(null)
   const [carregandoEdicao, setCarregandoEdicao] = useState(editando)
 
@@ -563,6 +565,7 @@ export default function NovaVenda() {
         setTipoTransferencia(transf.tipo)
         setValorTransferencia(transf.valor)
         setIpvaInfo(venda.ipva_info ?? '')
+        setUnidade((venda.unidade ?? 'fd_veiculos') as Unidade)
 
         // Fotos — rastreia IDs já no banco
         fotosNoBancoIds.current = new Set(fotosExistentes.map((f) => f.id))
@@ -821,6 +824,7 @@ export default function NovaVenda() {
 
       const dadosVenda = {
         ...dados,
+        unidade,
         versao:                   dados.versao || undefined,
         comprador_rg:             dados.comprador_rg || undefined,
         comprador_nascimento:     dados.comprador_nascimento || undefined,
@@ -908,6 +912,45 @@ export default function NovaVenda() {
       />
 
       <form onSubmit={handleSubmit(enviar)} className="flex-1 p-4 md:p-6 space-y-4 max-w-4xl">
+
+        {/* Unidade */}
+        <div className="bg-white border border-gray-200 rounded-xl p-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="flex items-center gap-2">
+              <Building2 size={16} className="text-gray-400" />
+              <div>
+                <p className="text-sm font-semibold text-gray-900">Unidade</p>
+                <p className="text-xs text-gray-500">Divisão comercial desta venda</p>
+              </div>
+            </div>
+            {temPerfil('supervisor') ? (
+              <div className="flex gap-1.5">
+                {(['fd_veiculos', 'fd_motos'] as Unidade[]).map((u) => (
+                  <button
+                    key={u}
+                    type="button"
+                    onClick={() => setUnidade(u)}
+                    className={`text-sm px-4 py-1.5 rounded-lg border transition-colors ${
+                      unidade === u
+                        ? u === 'fd_motos' ? 'bg-red-600 text-white border-red-600' : 'bg-blue-600 text-white border-blue-600'
+                        : 'border-gray-200 text-gray-600 hover:border-blue-300'
+                    }`}
+                  >
+                    {u === 'fd_motos' ? 'FD Motos' : 'FD Veículos'}
+                  </button>
+                ))}
+              </div>
+            ) : (
+              <span className={`text-sm font-medium px-3 py-1 rounded-full border ${
+                unidade === 'fd_motos'
+                  ? 'bg-red-50 text-red-700 border-red-200'
+                  : 'bg-blue-50 text-blue-700 border-blue-200'
+              }`}>
+                {unidade === 'fd_motos' ? 'FD Motos' : 'FD Veículos'}
+              </span>
+            )}
+          </div>
+        </div>
 
         {/* Dados do Veículo */}
         <Secao titulo="Dados do Veículo">
