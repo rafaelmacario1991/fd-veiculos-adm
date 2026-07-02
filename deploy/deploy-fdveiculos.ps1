@@ -18,7 +18,12 @@ if ($LASTEXITCODE -ne 0) {
 }
 
 Write-Host "[2/4] Preparando VPS para receber os arquivos..." -ForegroundColor Cyan
-ssh @SSH_OPTS root@$VPS "rm -rf $TMP_PATH"
+# Timeout de 10s no rm -rf para evitar travamento silencioso
+$job = Start-Job { param($k,$v,$p) ssh -i $k -o ConnectTimeout=10 -o BatchMode=yes root@$v "rm -rf $p" } -ArgumentList $KEY,$VPS,$TMP_PATH
+if (-not (Wait-Job $job -Timeout 10)) {
+    Stop-Job $job; Write-Host "rm -rf ignorado (timeout) — continuando." -ForegroundColor Yellow
+}
+Remove-Job $job -Force
 
 Write-Host "[3/4] Enviando dist/ para o VPS..." -ForegroundColor Cyan
 scp @SSH_OPTS -rq dist "root@${VPS}:${TMP_PATH}"

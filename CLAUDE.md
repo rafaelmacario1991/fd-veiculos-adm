@@ -321,7 +321,8 @@ notifications_log (id uuid PK, sale_id uuid FK, evento text, destinatario_id uui
 - **`gen_salt`/`crypt`** em funções SQL: usar `SET search_path = public, extensions` e `extensions.crypt()` / `extensions.gen_salt()`.
 - **Fotos no modo edição:** `salvarFotosNoBanco` faz INSERT. Rastrear IDs existentes com `useRef<Set<string>>` e filtrar antes de salvar. Mesmo padrão para documentos de entrada.
 - **`listarTodasVendas`:** usa `users!vendedor_id(nome)` para evitar ambiguidade no join.
-- **Deploy SSH:** o comando `ssh rm -rf /tmp/fdveiculos_upload` às vezes pendura — matar o processo e rodar novamente.
+- **Deploy SSH — passo 2 trava:** o `ssh rm -rf /tmp/fdveiculos_upload` às vezes pende indefinidamente. O script foi corrigido (2026-07-02) com `Start-Job + Wait-Job -Timeout 10` — agora ignora e continua automaticamente. Se ainda assim o deploy resultar em **500 Internal Server Error**, significa que `/var/www/fdveiculos` foi apagado mas o `mv` não completou — basta rodar o script de novo.
+- **Não tentar SCP/tar via ferramenta Claude:** transferências longas travam no ambiente de ferramentas. Pedir sempre ao usuário rodar `.\deploy\deploy-fdveiculos.ps1` no próprio terminal.
 
 ---
 
