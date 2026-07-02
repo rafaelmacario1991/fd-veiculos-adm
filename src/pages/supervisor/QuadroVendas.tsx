@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { format, parseISO } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
 import { useRequererPerfil } from '@/hooks/useAuth'
@@ -21,7 +22,7 @@ import {
 } from 'recharts'
 import {
   TrendingUp, ShoppingBag, DollarSign, BarChart2, Users,
-  List, Trash2, Ban, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
+  List, Trash2, Ban, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown, Pencil,
 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -66,6 +67,7 @@ type Direcao = 'asc' | 'desc'
 export default function QuadroVendas() {
   useRequererPerfil(['supervisor'])
 
+  const navigate = useNavigate()
   const [aba, setAba] = useState<Aba>('analise')
 
   // Filtros compartilhados
@@ -518,6 +520,13 @@ export default function QuadroVendas() {
                             </td>
                             <td className="py-3 px-4">
                               <div className="flex items-center justify-end gap-1">
+                                <button
+                                  onClick={() => navigate(`/vendedor/editar-venda/${v.id}`)}
+                                  title="Editar venda"
+                                  className="p-1.5 rounded-lg text-blue-500 hover:bg-blue-50 hover:text-blue-700 transition-colors"
+                                >
+                                  <Pencil size={15} />
+                                </button>
                                 {v.status !== 'cancelada' && (
                                   <button
                                     onClick={() => setAcaoConfirm({ tipo: 'cancelar', venda: v })}
