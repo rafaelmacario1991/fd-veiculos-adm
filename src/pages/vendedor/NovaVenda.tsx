@@ -488,6 +488,7 @@ export default function NovaVenda() {
 
   // Comprovantes de pagamento (PIX / Cartão)
   const [comprovantes, setComprovantes] = useState<DocumentoEntrada[]>([])
+  const [erroComprovante, setErroComprovante] = useState<string | null>(null)
 
   // Veículo de entrada
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
@@ -755,6 +756,24 @@ export default function NovaVenda() {
       return
     }
     setErroDocComprador(null)
+
+    // Validação — comprovantes de pagamento obrigatórios para PIX e Cartão
+    const temPix    = linhas.some((l) => l.tipo === 'pix')
+    const temCartao = linhas.some((l) => l.tipo === 'cartao')
+    const temComprovantePix    = comprovantes.some((d) => d.tipo === 'comprovante_pix')
+    const temComprovanteCartao = comprovantes.some((d) => d.tipo === 'comprovante_cartao')
+    const errosPix    = temPix && !temComprovantePix
+    const errosCartao = temCartao && !temComprovanteCartao
+    if (errosPix || errosCartao) {
+      const msg = [
+        errosPix    ? 'Comprovante PIX' : '',
+        errosCartao ? 'Comprovante Cartão' : '',
+      ].filter(Boolean).join(' e ')
+      setErroComprovante(`Anexe o ${msg} antes de registrar.`)
+      document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      return
+    }
+    setErroComprovante(null)
 
     // Validação dos veículos de entrada
     if (temEntrada) {
@@ -1207,24 +1226,31 @@ export default function NovaVenda() {
           {/* Comprovantes de pagamento */}
           {(linhas.some((l) => l.tipo === 'pix') || linhas.some((l) => l.tipo === 'cartao')) && (
             <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
-              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Comprovantes de Pagamento</p>
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
+                Comprovantes de Pagamento <span className="text-red-500">*</span>
+              </p>
               {linhas.some((l) => l.tipo === 'pix') && (
                 <UploadDocumento
                   saleId={saleId}
                   tipo="comprovante_pix"
-                  label="Comprovante PIX"
+                  label="Comprovante PIX *"
                   documentos={comprovantes}
-                  onChange={setComprovantes}
+                  onChange={(docs) => { setComprovantes(docs); setErroComprovante(null) }}
                 />
               )}
               {linhas.some((l) => l.tipo === 'cartao') && (
                 <UploadDocumento
                   saleId={saleId}
                   tipo="comprovante_cartao"
-                  label="Comprovante Cartão"
+                  label="Comprovante Cartão *"
                   documentos={comprovantes}
-                  onChange={setComprovantes}
+                  onChange={(docs) => { setComprovantes(docs); setErroComprovante(null) }}
                 />
+              )}
+              {erroComprovante && (
+                <p className="text-xs text-red-600 flex items-center gap-1">
+                  <span>⚠</span> {erroComprovante}
+                </p>
               )}
             </div>
           )}
