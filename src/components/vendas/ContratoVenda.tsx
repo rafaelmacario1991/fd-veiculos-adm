@@ -82,7 +82,7 @@ export default function ContratoVenda({ venda }: Props) {
     <div className="contrato-print-area" style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', color: '#000', background: '#fff', padding: '20mm 15mm', maxWidth: '210mm', margin: '0 auto', lineHeight: 1.4 }}>
 
       {/* ── CABEÇALHO ── */}
-      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '10px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', borderBottom: '2px solid #000', paddingBottom: '8px', marginBottom: '0' }}>
         <img src={logoFD} alt="FD Veículos" style={{ height: '60px', marginRight: '16px' }} />
         <div style={{ flex: 1 }}>
           <div style={{ fontWeight: 'bold', fontSize: '11px' }}>{EMPRESA.razaoSocial}</div>
@@ -90,9 +90,11 @@ export default function ContratoVenda({ venda }: Props) {
           <div>{EMPRESA.logradouro}, Nº {EMPRESA.numero} — {EMPRESA.bairro} — CEP {EMPRESA.cep} — {EMPRESA.cidade}</div>
           <div>Tel: {EMPRESA.telefone}</div>
         </div>
-        <div style={{ textAlign: 'center', minWidth: '120px' }}>
-          <div style={{ fontSize: '14px', fontWeight: 'bold', border: '2px solid #000', padding: '4px 10px' }}>CONTRATO DE VENDA</div>
-        </div>
+      </div>
+
+      {/* ── TÍTULO ── */}
+      <div style={{ textAlign: 'center', margin: '8px 0 10px', padding: '6px 0', borderBottom: '1px solid #ccc' }}>
+        <span style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>CONTRATO DE VENDA</span>
       </div>
 
       {/* ── EMPRESA / VENDEDOR ── */}
