@@ -3,6 +3,7 @@ import { useRequererPerfil } from '@/hooks/useAuth'
 import { useAuthStore } from '@/store/authStore'
 import {
   listarComissoes,
+  listarMesesComEntradas,
   adicionarComissao,
   excluirComissao,
   buscarConfig,
@@ -24,9 +25,30 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import {
   Plus, Trash2, TrendingDown, Wallet,
   Settings, ChevronDown, ChevronUp, AlertCircle, RefreshCw, Printer,
+  ChevronLeft, ChevronRight, Calendar,
 } from 'lucide-react'
-import { format, parseISO } from 'date-fns'
+import { format, parseISO, addMonths, subMonths } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
+
+function mesAtual(): string {
+  const d = new Date()
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
+
+function formatarMes(mes: string): string {
+  const [ano, m] = mes.split('-')
+  const d = new Date(parseInt(ano), parseInt(m) - 1, 1)
+  return format(d, 'MMMM yyyy', { locale: ptBR })
+    .replace(/^\w/, (c) => c.toUpperCase())
+}
+
+function navMes(mes: string, delta: number): string {
+  const [ano, m] = mes.split('-')
+  const d = delta > 0
+    ? addMonths(new Date(parseInt(ano), parseInt(m) - 1, 1), 1)
+    : subMonths(new Date(parseInt(ano), parseInt(m) - 1, 1), 1)
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
+}
 
 function moeda(v: number) {
   return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
@@ -43,6 +65,8 @@ export default function MinhasComissoes() {
   useRequererPerfil(['vendedor', 'supervisor'])
 
   const { usuario } = useAuthStore()
+  const [mes, setMes]               = useState<string>(mesAtual())
+  const [mesesExistentes, setMesesExistentes] = useState<string[]>([])
   const [comissoes, setComissoes]   = useState<Comissao[]>([])
   const [config, setConfig]         = useState<ComissaoConfig | null>(null)
   const [carregando, setCarregando] = useState(true)
@@ -53,18 +77,22 @@ export default function MinhasComissoes() {
     if (!usuario?.id) return
     setCarregando(true)
     try {
-      const [lista, cfg] = await Promise.all([
-        listarComissoes(usuario.id),
+      const [lista, cfg, meses] = await Promise.all([
+        listarComissoes(usuario.id, mes),
         buscarConfig(usuario.id),
+        listarMesesComEntradas(usuario.id),
       ])
       setComissoes(lista)
       setConfig(cfg)
+      // garante que o mês atual sempre aparece na lista de meses com entradas
+      const set = new Set([mesAtual(), ...meses])
+      setMesesExistentes([...set].sort().reverse())
     } finally {
       setCarregando(false)
     }
   }
 
-  useEffect(() => { carregar() }, [usuario?.id])
+  useEffect(() => { carregar() }, [usuario?.id, mes])
 
   // ── Cálculo dinâmico retroativo ──────────────────────────────
   const totalVendas = comissoes.filter(
@@ -110,6 +138,39 @@ export default function MinhasComissoes() {
       />
 
       <div className="flex-1 p-4 md:p-6 space-y-4">
+
+        {/* ── Seletor de mês (oculto no print) ── */}
+        <div className="print-hidden flex items-center justify-between gap-3 bg-white border border-gray-200 rounded-xl px-4 py-2.5">
+          <button
+            onClick={() => setMes((m) => navMes(m, -1))}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
+            title="Mês anterior"
+          >
+            <ChevronLeft size={16} />
+          </button>
+
+          <div className="flex items-center gap-2 flex-1 justify-center">
+            <Calendar size={14} className="text-blue-600 flex-shrink-0" />
+            <select
+              value={mes}
+              onChange={(e) => setMes(e.target.value)}
+              className="text-sm font-semibold text-gray-800 bg-transparent border-none outline-none cursor-pointer text-center"
+            >
+              {mesesExistentes.map((m) => (
+                <option key={m} value={m}>{formatarMes(m)}</option>
+              ))}
+            </select>
+          </div>
+
+          <button
+            onClick={() => setMes((m) => navMes(m, 1))}
+            disabled={mes >= mesAtual()}
+            className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
+            title="Próximo mês"
+          >
+            <ChevronRight size={16} />
+          </button>
+        </div>
 
         {/* ── Configuração (oculta no print) ── */}
         <div className="print-hidden">
@@ -221,7 +282,7 @@ export default function MinhasComissoes() {
                   <div>
                     <p style={{ fontSize: '18px', fontWeight: 700, color: '#1E40AF', margin: 0 }}>FD Veículos</p>
                     <p style={{ fontSize: '13px', fontWeight: 600, color: '#374151', margin: '2px 0 0' }}>
-                      Espelho de Comissão
+                      Espelho de Comissão — {formatarMes(mes)}
                     </p>
                   </div>
                   <div style={{ textAlign: 'right', fontSize: '11px', color: '#6B7280' }}>
@@ -375,6 +436,7 @@ export default function MinhasComissoes() {
           vendedorId={usuario?.id ?? ''}
           config={config}
           totalVendas={totalVendas}
+          mesCompetencia={mes}
         />
       )}
     </div>
@@ -558,7 +620,7 @@ function PainelConfig({
 
 // ── Modal de nova entrada ────────────────────────────────────────
 function ModalNovaEntrada({
-  aberto, onFechar, onSalvo, vendedorId, config, totalVendas,
+  aberto, onFechar, onSalvo, vendedorId, config, totalVendas, mesCompetencia,
 }: {
   aberto: boolean
   onFechar: () => void
@@ -566,6 +628,7 @@ function ModalNovaEntrada({
   vendedorId: string
   config: ComissaoConfig
   totalVendas: number
+  mesCompetencia: string
 }) {
   const [tipo, setTipo]                   = useState<TipoComissao>('financiamento')
   const [descricao, setDescricao]         = useState('')
@@ -575,6 +638,7 @@ function ModalNovaEntrada({
   const [valorLivre, setValorLivre]       = useState('')
   const [comTransferencia, setComTransferencia] = useState(false)
   const [valorTransferencia, setValorTransferencia] = useState('')
+  const [mesSelecionado, setMesSelecionado] = useState(mesCompetencia)
   const [salvando, setSalvando]           = useState(false)
   const [erro, setErro]                   = useState('')
 
@@ -591,6 +655,7 @@ function ModalNovaEntrada({
     setTipo('financiamento'); setDescricao(''); setPlaca('')
     setValorFinanciado(''); setRetorno(''); setValorLivre(''); setErro('')
     setComTransferencia(false); setValorTransferencia('')
+    setMesSelecionado(mesCompetencia)
   }
   function fechar() { resetar(); onFechar() }
 
@@ -623,6 +688,7 @@ function ModalNovaEntrada({
         valor_financiado: tipo === 'financiamento' ? vf : undefined,
         retorno: tipo === 'financiamento' ? ret : undefined,
         valor_comissao: valorComissao,
+        mes_competencia: mesSelecionado,
       })
       resetar()
       onSalvo()
@@ -780,6 +846,26 @@ function ModalNovaEntrada({
               </div>
             </div>
           )}
+
+          {/* Mês de competência */}
+          <div className="border-t border-gray-100 pt-3">
+            <Label className="text-xs font-medium flex items-center gap-1.5">
+              <Calendar size={12} className="text-blue-500" />
+              Mês de Competência
+            </Label>
+            <input
+              type="month"
+              value={mesSelecionado}
+              max={mesAtual()}
+              onChange={(e) => setMesSelecionado(e.target.value)}
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-1 focus:ring-ring"
+            />
+            {mesSelecionado !== mesCompetencia && (
+              <p className="text-[11px] text-amber-600 mt-1">
+                Lançamento retroativo: será salvo em {formatarMes(mesSelecionado)}
+              </p>
+            )}
+          </div>
 
           {erro && <p className="text-xs text-red-600">{erro}</p>}
 

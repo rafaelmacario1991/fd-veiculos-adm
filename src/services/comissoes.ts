@@ -11,6 +11,7 @@ export interface Comissao {
   valor_financiado: number | null
   retorno: number | null
   valor_comissao: number
+  mes_competencia: string
   criado_em: string
 }
 
@@ -32,6 +33,7 @@ export interface DadosNovaComissao {
   valor_financiado?: number
   retorno?: number
   valor_comissao: number
+  mes_competencia: string
 }
 
 // ── Cálculos ────────────────────────────────────────────────────
@@ -100,15 +102,28 @@ export function calcularValorEntrada(
 
 // ── Entradas de comissão ─────────────────────────────────────────
 
-export async function listarComissoes(vendedorId: string): Promise<Comissao[]> {
+export async function listarComissoes(vendedorId: string, mes: string): Promise<Comissao[]> {
   const { data, error } = await supabase
     .from('comissoes')
     .select('*')
     .eq('vendedor_id', vendedorId)
+    .eq('mes_competencia', mes)
     .order('criado_em', { ascending: false })
 
   if (error) throw error
   return (data ?? []) as Comissao[]
+}
+
+export async function listarMesesComEntradas(vendedorId: string): Promise<string[]> {
+  const { data, error } = await supabase
+    .from('comissoes')
+    .select('mes_competencia')
+    .eq('vendedor_id', vendedorId)
+    .order('mes_competencia', { ascending: false })
+
+  if (error) throw error
+  const unicos = [...new Set((data ?? []).map((r) => (r as { mes_competencia: string }).mes_competencia))]
+  return unicos
 }
 
 export async function adicionarComissao(
