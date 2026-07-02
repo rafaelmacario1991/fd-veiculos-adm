@@ -93,8 +93,8 @@ export default function ContratoVenda({ venda }: Props) {
       </div>
 
       {/* ── TÍTULO ── */}
-      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '8px 0 10px', padding: '6px 0', borderBottom: '1px solid #ccc', width: '100%' }}>
-        <span style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px', textAlign: 'center' }}>CONTRATO DE VENDA</span>
+      <div style={{ margin: '8px 0 10px', paddingBottom: '6px', borderBottom: '1px solid #ccc', textAlign: 'center' }}>
+        <strong style={{ fontSize: '14px', letterSpacing: '2px' }}>CONTRATO DE VENDA</strong>
       </div>
 
       {/* ── EMPRESA / VENDEDOR ── */}
@@ -221,16 +221,16 @@ export default function ContratoVenda({ venda }: Props) {
       )}
 
       {/* ── CLÁUSULAS ── */}
-      <Secao titulo="CLÁUSULAS CONTRATUAIS">
+      <Secao titulo="CLÁUSULAS CONTRATUAIS" semQuebra>
         {CLAUSULAS.map((c, i) => (
-          <div key={i} style={{ marginBottom: '4px' }}>
+          <div key={i} style={{ marginBottom: '4px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
             <strong>Cláusula {i + 1}ª.</strong> {c}
           </div>
         ))}
       </Secao>
 
       {/* ── ASSINATURAS ── */}
-      <div style={{ marginTop: '12px', fontSize: '10px' }}>
+      <div style={{ marginTop: '12px', fontSize: '10px', breakInside: 'avoid', pageBreakInside: 'avoid' }}>
         <div style={{ marginBottom: '10px' }}>
           {EMPRESA.cidade}, {hora} — {dataExtenso}
         </div>
@@ -258,10 +258,20 @@ export default function ContratoVenda({ venda }: Props) {
 
 // ── Sub-componentes ──────────────────────────────────────────────
 
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Secao({ titulo, children, semQuebra }: { titulo: string; children: React.ReactNode; semQuebra?: boolean }) {
   return (
-    <div style={{ marginBottom: '8px', border: '1px solid #999', borderRadius: '2px', overflow: 'hidden' }}>
-      <div style={{ background: '#1E40AF', color: '#fff', fontWeight: 'bold', padding: '2px 6px', fontSize: '9px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+    <div style={{
+      marginBottom: '8px',
+      border: '1px solid #999',
+      borderRadius: '2px',
+      ...(semQuebra ? {} : { breakInside: 'avoid', pageBreakInside: 'avoid' }),
+    }}>
+      <div style={{
+        background: '#1E40AF', color: '#fff', fontWeight: 'bold',
+        padding: '2px 6px', fontSize: '9px', textTransform: 'uppercase',
+        letterSpacing: '0.5px', borderRadius: '2px 2px 0 0',
+        breakAfter: 'avoid', pageBreakAfter: 'avoid',
+      }}>
         {titulo}
       </div>
       <div style={{ padding: '4px 6px', background: '#fff' }}>

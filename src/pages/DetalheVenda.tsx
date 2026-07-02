@@ -623,7 +623,7 @@ export default function DetalheVenda() {
 
       {/* Overlay do contrato — impressão */}
       {mostrarContrato && (
-        <div className="fixed inset-0 z-50 bg-gray-100 overflow-auto print-hidden-overlay">
+        <div className="contrato-overlay fixed inset-0 z-50 bg-white overflow-auto">
           {/* Barra de ações — some no print */}
           <div className="no-print sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between shadow-sm print-hidden">
             <div className="flex items-center gap-2">
