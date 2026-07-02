@@ -249,6 +249,31 @@ body {
 .dark ::-webkit-scrollbar-thumb:hover { background: oklch(0.48 0 0); }
 
 /* ============================================================
+   Contrato — modo edição (contenteditable)
+   ============================================================ */
+.campo-editavel {
+  border-bottom: 1px dashed #1E40AF;
+  outline: none;
+  cursor: text;
+  min-width: 16px;
+  display: inline;
+  border-radius: 2px;
+  padding: 0 1px;
+  transition: background 0.1s;
+}
+
+.campo-editavel:focus {
+  background: #EFF6FF;
+  border-bottom-color: #2563EB;
+}
+
+.campo-editavel--bloco {
+  display: block;
+  width: 100%;
+  min-height: 16px;
+}
+
+/* ============================================================
    Print / Salvar PDF
    ============================================================ */
 @media print {
@@ -281,6 +306,13 @@ body {
         100% da largura imprimível (margem vem do @page)
   ─────────────────────────────────────────────────────────── */
   body:has(.contrato-print-area) { visibility: hidden; }
+
+  /* Remove indicadores de edição no print */
+  .campo-editavel {
+    border-bottom: none !important;
+    background: transparent !important;
+    cursor: default !important;
+  }
 
   .contrato-overlay {
     visibility: visible !important;

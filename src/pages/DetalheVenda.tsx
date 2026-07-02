@@ -14,7 +14,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import {
   ArrowLeft, Eye, Trash2, FileText, Printer, X, AlertCircle,
-  CheckCircle2, Clock, AlertTriangle, Circle,
+  CheckCircle2, Clock, AlertTriangle, Circle, Pencil, CheckCheck,
 } from 'lucide-react'
 
 // Campos obrigatórios para emissão do contrato
@@ -159,6 +159,7 @@ export default function DetalheVenda() {
   const [carregando, setCarregando] = useState(true)
   const [mostrarResumo, setMostrarResumo] = useState(false)
   const [mostrarContrato, setMostrarContrato] = useState(false)
+  const [modoEdicao, setModoEdicao] = useState(false)
   const [camposFaltantes, setCamposFaltantes] = useState<typeof CAMPOS_CONTRATO>([])
   const [modalValidacao, setModalValidacao] = useState(false)
 
@@ -630,11 +631,37 @@ export default function DetalheVenda() {
               <FileText size={16} className="text-blue-700" />
               <span className="font-semibold text-sm text-gray-800">Contrato de Venda</span>
               <span className="text-xs text-gray-400">— {venda.placa.toUpperCase()} · {venda.comprador_nome}</span>
+              {modoEdicao && (
+                <span className="ml-2 text-xs font-medium text-amber-600 bg-amber-50 border border-amber-200 rounded px-2 py-0.5">
+                  Modo edição — clique nos campos para editar
+                </span>
+              )}
             </div>
             <div className="flex gap-2">
+              {modoEdicao ? (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="border-green-500 text-green-700 hover:bg-green-50"
+                  onClick={() => setModoEdicao(false)}
+                >
+                  <CheckCheck size={13} className="mr-1.5" />
+                  Concluir edição
+                </Button>
+              ) : (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setModoEdicao(true)}
+                >
+                  <Pencil size={13} className="mr-1.5" />
+                  Editar contrato
+                </Button>
+              )}
               <Button
                 size="sm"
                 onClick={() => window.print()}
+                disabled={modoEdicao}
               >
                 <Printer size={13} className="mr-1.5" />
                 Imprimir / Salvar PDF
@@ -642,7 +669,7 @@ export default function DetalheVenda() {
               <Button
                 size="sm"
                 variant="outline"
-                onClick={() => setMostrarContrato(false)}
+                onClick={() => { setMostrarContrato(false); setModoEdicao(false) }}
               >
                 <X size={13} className="mr-1.5" />
                 Fechar
@@ -650,7 +677,7 @@ export default function DetalheVenda() {
             </div>
           </div>
           {/* Conteúdo do contrato */}
-          <ContratoVenda venda={venda} />
+          <ContratoVenda venda={venda} editavel={modoEdicao} />
         </div>
       )}
     </div>
