@@ -93,8 +93,8 @@ export default function ContratoVenda({ venda }: Props) {
       </div>
 
       {/* ── TÍTULO ── */}
-      <div style={{ textAlign: 'center', margin: '8px 0 10px', padding: '6px 0', borderBottom: '1px solid #ccc' }}>
-        <span style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px' }}>CONTRATO DE VENDA</span>
+      <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', margin: '8px 0 10px', padding: '6px 0', borderBottom: '1px solid #ccc', width: '100%' }}>
+        <span style={{ fontSize: '14px', fontWeight: 'bold', letterSpacing: '2px', textAlign: 'center' }}>CONTRATO DE VENDA</span>
       </div>
 
       {/* ── EMPRESA / VENDEDOR ── */}
