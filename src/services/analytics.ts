@@ -62,7 +62,7 @@ export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQ
   // data_venda explícita (submetidas pelo vendedor) não sejam excluídas.
   let query = supabase
     .from('sales')
-    .select('id, criado_em, data_venda, valor_venda, status, forma_pagamento, banco_financeira, formas_pagamento_json, vendedor_id, users!sales_vendedor_id_fkey(nome)')
+    .select('id, criado_em, data_venda, valor_venda, status, forma_pagamento, canal_venda, banco_financeira, formas_pagamento_json, vendedor_id, users!sales_vendedor_id_fkey(nome)')
     .neq('status', 'cancelada')
     .order('criado_em', { ascending: true })
 
