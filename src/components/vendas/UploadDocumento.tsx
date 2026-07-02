@@ -8,7 +8,7 @@ import { FileUp, Loader2, X, FileCheck, AlertCircle } from 'lucide-react'
 
 interface Props {
   saleId: string
-  tipo: DocumentoEntrada['tipo']
+  tipo: string
   label: string
   documentos: DocumentoEntrada[]
   onChange: (docs: DocumentoEntrada[]) => void

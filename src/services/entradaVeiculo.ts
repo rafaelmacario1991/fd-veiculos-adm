@@ -26,65 +26,89 @@ export interface DadosEntradaVeiculo {
 export interface EntradaVeiculo extends DadosEntradaVeiculo {
   id: string
   sale_id: string
+  posicao: number
   criado_em: string
 }
 
 export interface DocumentoEntrada {
   id: string
   sale_id: string
-  tipo: 'crlv_entrada' | 'cnh_rg_entrada'
+  tipo: string
   storage_path: string
   url: string
   nome_arquivo: string
   criado_em: string
 }
 
+// Salva múltiplos veículos de entrada: deleta os existentes e re-insere todos.
+export async function salvarEntradasVeiculo(
+  saleId: string,
+  veiculos: Array<{ dados: DadosEntradaVeiculo; debitos: DebitoEntrada[]; posicao: number }>
+): Promise<void> {
+  const { error: delError } = await supabase
+    .from('trade_in_vehicles')
+    .delete()
+    .eq('sale_id', saleId)
+  if (delError) throw delError
+
+  if (veiculos.length === 0) return
+
+  const { error } = await supabase
+    .from('trade_in_vehicles')
+    .insert(
+      veiculos.map(({ dados, debitos, posicao }) => {
+        const { debitos: _d, ...dadosResto } = dados
+        return { sale_id: saleId, posicao, ...dadosResto, debitos_json: debitos }
+      })
+    )
+  if (error) throw error
+}
+
+// Mantido por compatibilidade com código legado (upsert de 1 veículo).
 export async function salvarEntradaVeiculo(
   saleId: string,
   dados: DadosEntradaVeiculo
 ): Promise<void> {
   const { debitos, ...resto } = dados
-  const { error } = await supabase
-    .from('trade_in_vehicles')
-    .upsert(
-      { sale_id: saleId, ...resto, debitos_json: debitos ?? [] },
-      { onConflict: 'sale_id' }
-    )
-  if (error) throw error
+  await salvarEntradasVeiculo(saleId, [{ dados: resto as DadosEntradaVeiculo, debitos: debitos ?? [], posicao: 0 }])
 }
 
-export async function buscarEntradaVeiculo(saleId: string): Promise<EntradaVeiculo | null> {
+// Retorna todos os veículos de entrada de uma venda, ordenados por posição.
+export async function buscarEntradasVeiculo(saleId: string): Promise<EntradaVeiculo[]> {
   const { data, error } = await supabase
     .from('trade_in_vehicles')
     .select('*')
     .eq('sale_id', saleId)
-    .maybeSingle()
-
+    .order('posicao')
   if (error) throw error
-  if (!data) return null
-
-  const raw = data as Record<string, unknown>
-  const { debitos_json, ...resto } = raw
-  return { ...resto, debitos: (debitos_json ?? []) as DebitoEntrada[] } as EntradaVeiculo
+  return (data ?? []).map((row) => {
+    const raw = row as Record<string, unknown>
+    const { debitos_json, ...rest } = raw
+    return { ...rest, debitos: (debitos_json ?? []) as DebitoEntrada[] } as EntradaVeiculo
+  })
 }
 
+// Mantido por compatibilidade — retorna apenas o primeiro veículo.
+export async function buscarEntradaVeiculo(saleId: string): Promise<EntradaVeiculo | null> {
+  const entries = await buscarEntradasVeiculo(saleId)
+  return entries[0] ?? null
+}
+
+// Retorna todos os documentos de entrada de uma venda (todos os veículos).
 export async function listarDocumentosEntrada(saleId: string): Promise<DocumentoEntrada[]> {
   const { data, error } = await supabase
     .from('sale_attachments')
     .select('*')
     .eq('sale_id', saleId)
-    .in('tipo', ['crlv_entrada', 'cnh_rg_entrada'])
+    .or('tipo.like.crlv_entrada%,tipo.like.cnh_rg_entrada%')
     .order('criado_em')
-
   if (error) throw error
   return (data ?? []) as DocumentoEntrada[]
 }
 
-// Faz upload apenas no storage — sem inserir no banco.
-// Chamar salvarDocumentosNoBanco() após criarVenda() para persistir.
 export async function uploadDocumentoEntrada(
   saleId: string,
-  tipo: DocumentoEntrada['tipo'],
+  tipo: string,
   arquivo: File
 ): Promise<DocumentoEntrada> {
   const ext = arquivo.name.split('.').pop()
@@ -108,10 +132,9 @@ export async function uploadDocumentoEntrada(
     url: publicUrl,
     nome_arquivo: arquivo.name,
     criado_em: new Date().toISOString(),
-  } as DocumentoEntrada
+  }
 }
 
-// Persiste todos os documentos no banco após a venda ser criada.
 export async function salvarDocumentosNoBanco(docs: DocumentoEntrada[]): Promise<void> {
   if (!docs.length) return
   const { error } = await supabase.from('sale_attachments').insert(
@@ -127,12 +150,10 @@ export async function salvarDocumentosNoBanco(docs: DocumentoEntrada[]): Promise
   if (error) throw error
 }
 
-// Remove do storage antes da venda ser salva (sem registro no banco).
 export async function deletarDocumentoTemp(doc: DocumentoEntrada): Promise<void> {
   await supabase.storage.from('documentos-entrada').remove([doc.storage_path])
 }
 
-// Remove storage + registro no banco (após venda criada).
 export async function deletarDocumentoEntrada(doc: DocumentoEntrada): Promise<void> {
   await supabase.storage.from('documentos-entrada').remove([doc.storage_path])
   const { error } = await supabase.from('sale_attachments').delete().eq('id', doc.id)

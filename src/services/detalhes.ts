@@ -53,7 +53,7 @@ export interface DetalheVenda {
   pendencias_vendedor: PendenciaVendedorDetalhe[]
   pendencias_financeiras: PendenciaFinanceiraDetalhe[]
   transferencia: TransferenciaDetalhe | null
-  veiculo_entrada: VeiculoEntradaDetalhe | null
+  veiculos_entrada: VeiculoEntradaDetalhe[]
 }
 
 export interface AtividadeDetalhe {
@@ -155,7 +155,7 @@ export async function buscarDetalheVenda(saleId: string): Promise<DetalheVenda |
       .from('trade_in_vehicles')
       .select('*')
       .eq('sale_id', saleId)
-      .maybeSingle(),
+      .order('posicao'),
   ])
 
   if (!venda) return null
@@ -180,6 +180,6 @@ export async function buscarDetalheVenda(saleId: string): Promise<DetalheVenda |
           despachante: ((transferencia as unknown as Record<string, unknown>)['dispatchers'] as TransferenciaDetalhe['despachante']) ?? null,
         }
       : null,
-    veiculo_entrada: entrada as VeiculoEntradaDetalhe | null,
+    veiculos_entrada: (entrada ?? []) as VeiculoEntradaDetalhe[],
   }
 }

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { VendaListagem } from '@/services/vendas'
 import { listarAnexos, type AnexoVenda } from '@/services/anexos'
-import { buscarEntradaVeiculo, listarDocumentosEntrada, type EntradaVeiculo, type DocumentoEntrada } from '@/services/entradaVeiculo'
+import { buscarEntradasVeiculo, listarDocumentosEntrada, type EntradaVeiculo, type DocumentoEntrada } from '@/services/entradaVeiculo'
 import { Car, User, DollarSign, FileText, Camera, ArrowLeftRight, FileCheck, BadgeInfo } from 'lucide-react'
 
 interface Props {
@@ -52,13 +52,13 @@ function Secao({ icone, titulo, children }: { icone: React.ReactNode; titulo: st
 export default function ModalResumoVenda({ venda, onFechar }: Props) {
   const [fotos, setFotos] = useState<AnexoVenda[]>([])
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
-  const [entrada, setEntrada] = useState<EntradaVeiculo | null>(null)
+  const [entradas, setEntradas] = useState<EntradaVeiculo[]>([])
   const [docsEntrada, setDocsEntrada] = useState<DocumentoEntrada[]>([])
 
   useEffect(() => {
-    if (!venda) { setFotos([]); setEntrada(null); setDocsEntrada([]); return }
+    if (!venda) { setFotos([]); setEntradas([]); setDocsEntrada([]); return }
     listarAnexos(venda.id).then(setFotos).catch(() => setFotos([]))
-    buscarEntradaVeiculo(venda.id).then(setEntrada).catch(() => setEntrada(null))
+    buscarEntradasVeiculo(venda.id).then(setEntradas).catch(() => setEntradas([]))
     listarDocumentosEntrada(venda.id).then(setDocsEntrada).catch(() => setDocsEntrada([]))
   }, [venda?.id])
 
@@ -226,74 +226,88 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
             </>
           )}
 
-          {/* Veículo de entrada */}
-          {entrada && (
+          {/* Veículos de entrada */}
+          {entradas.length > 0 && (
             <>
               <hr className="border-gray-100" />
-              <Secao icone={<ArrowLeftRight size={13} />} titulo="Veículo de Entrada (Troca)">
-                <Linha label="Marca" valor={entrada.marca} />
-                <Linha label="Modelo" valor={entrada.modelo} />
-                <Linha label="Versão" valor={entrada.versao} />
-                <Linha label="Ano Fab / Modelo" valor={`${entrada.ano_fabricacao} / ${entrada.ano_modelo}`} />
-                <Linha label="Cor" valor={entrada.cor} />
-                <Linha label="Placa" valor={entrada.placa?.toUpperCase()} />
-                <Linha label="RENAVAM" valor={entrada.renavam} />
-                <Linha label="Chassi" valor={entrada.chassi} />
-                <Linha label="Quilometragem" valor={entrada.quilometragem ? `${entrada.quilometragem.toLocaleString('pt-BR')} km` : null} />
-                <Linha label="Valor Estimado (bruto)" valor={entrada.valor_estimado ? entrada.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null} />
+              {entradas.map((entrada, idx) => {
+                const sufixo = idx === 0 ? '' : `_${idx}`
+                const docsVeiculo = docsEntrada.filter(
+                  (d) => d.tipo === `crlv_entrada${sufixo}` || d.tipo === `cnh_rg_entrada${sufixo}`
+                )
+                const labelDocTipo = (tipo: string) => {
+                  if (tipo.startsWith('crlv_entrada')) return 'CRLV'
+                  if (tipo.startsWith('cnh_rg_entrada')) return 'CNH / RG'
+                  return tipo
+                }
+                return (
+                  <Secao
+                    key={entrada.id ?? idx}
+                    icone={<ArrowLeftRight size={13} />}
+                    titulo={entradas.length > 1 ? `Veículo de Entrada ${idx + 1} (Troca)` : 'Veículo de Entrada (Troca)'}
+                  >
+                    <Linha label="Marca" valor={entrada.marca} />
+                    <Linha label="Modelo" valor={entrada.modelo} />
+                    <Linha label="Versão" valor={entrada.versao} />
+                    <Linha label="Ano Fab / Modelo" valor={`${entrada.ano_fabricacao} / ${entrada.ano_modelo}`} />
+                    <Linha label="Cor" valor={entrada.cor} />
+                    <Linha label="Placa" valor={entrada.placa?.toUpperCase()} />
+                    <Linha label="RENAVAM" valor={entrada.renavam} />
+                    <Linha label="Chassi" valor={entrada.chassi} />
+                    <Linha label="Quilometragem" valor={entrada.quilometragem ? `${entrada.quilometragem.toLocaleString('pt-BR')} km` : null} />
+                    <Linha label="Valor Estimado (bruto)" valor={entrada.valor_estimado ? entrada.valor_estimado.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' }) : null} />
 
-                {entrada.debitos && entrada.debitos.length > 0 && (
-                  <div className="col-span-2">
-                    <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide block mb-1.5">Débitos do Veículo</span>
-                    <div className="space-y-1">
-                      {entrada.debitos.map((d, i) => (
-                        <div key={i} className="flex justify-between text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2.5 py-1.5">
-                          <span>{d.descricao || '—'}</span>
-                          <span className="font-medium">− {d.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                    {entrada.debitos && entrada.debitos.length > 0 && (
+                      <div className="col-span-2">
+                        <span className="text-[10px] font-medium text-gray-400 uppercase tracking-wide block mb-1.5">Débitos do Veículo</span>
+                        <div className="space-y-1">
+                          {entrada.debitos.map((d, i) => (
+                            <div key={i} className="flex justify-between text-xs text-amber-700 bg-amber-50 border border-amber-100 rounded px-2.5 py-1.5">
+                              <span>{d.descricao || '—'}</span>
+                              <span className="font-medium">− {d.valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
+                            </div>
+                          ))}
+                          <div className="flex justify-between text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5">
+                            <span>Entrada líquida</span>
+                            <span>
+                              {((entrada.valor_estimado ?? 0) - entrada.debitos.reduce((acc, d) => acc + d.valor, 0))
+                                .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
+                            </span>
+                          </div>
                         </div>
-                      ))}
-                      <div className="flex justify-between text-xs font-semibold text-blue-800 bg-blue-50 border border-blue-100 rounded px-2.5 py-1.5">
-                        <span>Entrada líquida</span>
-                        <span>
-                          {((entrada.valor_estimado ?? 0) - entrada.debitos.reduce((acc, d) => acc + d.valor, 0))
-                            .toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                        </span>
                       </div>
-                    </div>
-                  </div>
-                )}
+                    )}
 
-                <Linha label="Proprietário" valor={entrada.proprietario_nome} />
-                {entrada.observacoes && (
-                  <div className="col-span-2">
-                    <Linha label="Observações" valor={entrada.observacoes} />
-                  </div>
-                )}
+                    <Linha label="Proprietário" valor={entrada.proprietario_nome} />
+                    {entrada.observacoes && (
+                      <div className="col-span-2">
+                        <Linha label="Observações" valor={entrada.observacoes} />
+                      </div>
+                    )}
 
-                {/* Documentos anexados */}
-                {docsEntrada.length > 0 && (
-                  <div className="col-span-2 mt-1">
-                    <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-2">Documentos Anexados</p>
-                    <div className="space-y-1.5">
-                      {docsEntrada.map((doc) => (
-                        <a
-                          key={doc.id}
-                          href={doc.url}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center gap-2 text-xs text-blue-700 hover:underline"
-                        >
-                          <FileCheck size={13} className="text-green-600 flex-shrink-0" />
-                          <span className="font-medium">
-                            {doc.tipo === 'crlv_entrada' ? 'CRLV' : 'CNH / RG'}:
-                          </span>
-                          {doc.nome_arquivo}
-                        </a>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </Secao>
+                    {docsVeiculo.length > 0 && (
+                      <div className="col-span-2 mt-1">
+                        <p className="text-[10px] font-medium text-gray-400 uppercase tracking-wide mb-2">Documentos Anexados</p>
+                        <div className="space-y-1.5">
+                          {docsVeiculo.map((doc) => (
+                            <a
+                              key={doc.id}
+                              href={doc.url}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="flex items-center gap-2 text-xs text-blue-700 hover:underline"
+                            >
+                              <FileCheck size={13} className="text-green-600 flex-shrink-0" />
+                              <span className="font-medium">{labelDocTipo(doc.tipo)}:</span>
+                              {doc.nome_arquivo}
+                            </a>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </Secao>
+                )
+              })}
             </>
           )}
 

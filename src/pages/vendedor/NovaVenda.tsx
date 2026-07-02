@@ -25,8 +25,8 @@ import UploadFotos from '@/components/vendas/UploadFotos'
 import UploadDocumento from '@/components/vendas/UploadDocumento'
 import type { AnexoVenda } from '@/services/anexos'
 import {
-  salvarEntradaVeiculo,
-  buscarEntradaVeiculo,
+  salvarEntradasVeiculo,
+  buscarEntradasVeiculo,
   listarDocumentosEntrada,
   salvarDocumentosNoBanco,
   type DadosEntradaVeiculo,
@@ -35,6 +35,40 @@ import {
 } from '@/services/entradaVeiculo'
 import { Camera, Car, AlertCircle, Plus, X, Loader2, Search } from 'lucide-react'
 import { consultarPlaca } from '@/services/placaApi'
+
+// ---------------------------------------------------------------
+// Veículo de entrada — tipos e helpers
+// ---------------------------------------------------------------
+interface LinhaDebito { id: string; descricao: string; valor: string }
+
+interface EntradaItem {
+  localId: string
+  dados: Partial<DadosEntradaVeiculo>
+  debitos: LinhaDebito[]
+  documentos: DocumentoEntrada[]
+  erros: Record<string, string>
+  erroDoc: string | null
+  buscandoPlaca: boolean
+  erroBuscaPlaca: string | null
+}
+
+function novaEntradaItem(): EntradaItem {
+  return {
+    localId: crypto.randomUUID(),
+    dados: {},
+    debitos: [],
+    documentos: [],
+    erros: {},
+    erroDoc: null,
+    buscandoPlaca: false,
+    erroBuscaPlaca: null,
+  }
+}
+
+function tiposCrlvCnh(idx: number): { crlv: string; cnh: string } {
+  const suf = idx === 0 ? '' : `_${idx}`
+  return { crlv: `crlv_entrada${suf}`, cnh: `cnh_rg_entrada${suf}` }
+}
 
 // ---------------------------------------------------------------
 // Schema de validação
@@ -432,10 +466,6 @@ export default function NovaVenda() {
   const [buscandoPlaca, setBuscandoPlaca] = useState(false)
   const [erroBuscaPlaca, setErroBuscaPlaca] = useState<string | null>(null)
 
-  // Placa — busca automática (veículo de entrada)
-  const [buscandoPlacaEntrada, setBuscandoPlacaEntrada] = useState(false)
-  const [erroBuscaPlacaEntrada, setErroBuscaPlacaEntrada] = useState<string | null>(null)
-
   // CEP
   const [buscandoCep, setBuscandoCep] = useState(false)
   const [erroCep, setErroCep]         = useState<string | null>(null)
@@ -447,13 +477,7 @@ export default function NovaVenda() {
 
   // Veículo de entrada
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
-  const [dadosEntrada, setDadosEntrada] = useState<Partial<DadosEntradaVeiculo>>({})
-  const [documentosEntrada, setDocumentosEntrada] = useState<DocumentoEntrada[]>([])
-  const [errosEntrada, setErrosEntrada] = useState<Record<string, string>>({})
-  const [erroDocEntrada, setErroDocEntrada] = useState<string | null>(null)
-
-  interface LinhaDebito { id: string; descricao: string; valor: string }
-  const [debitosEntrada, setDebitosEntrada] = useState<LinhaDebito[]>([])
+  const [entradasVeiculo, setEntradasVeiculo] = useState<EntradaItem[]>([novaEntradaItem()])
 
   const {
     register,
@@ -476,10 +500,10 @@ export default function NovaVenda() {
     Promise.all([
       buscarVendaPorId(vendaId),
       listarAnexos(vendaId),
-      buscarEntradaVeiculo(vendaId),
+      buscarEntradasVeiculo(vendaId),
       listarDocumentosEntrada(vendaId),
     ])
-      .then(([venda, fotosExistentes, entradaExistente, docsExistentes]) => {
+      .then(([venda, fotosExistentes, entradasExistentes, docsExistentes]) => {
         // Preenche os campos do form
         reset({
           marca:                  venda.marca,
@@ -532,20 +556,32 @@ export default function NovaVenda() {
         fotosNoBancoIds.current = new Set(fotosExistentes.map((f) => f.id))
         setFotos(fotosExistentes)
 
-        // Documentos de entrada — rastreia IDs já no banco
+        // Documentos de entrada — rastreia IDs já no banco (todos os veículos)
         docsNoBancoIds.current = new Set(docsExistentes.map((d) => d.id))
-        setDocumentosEntrada(docsExistentes)
 
-        // Veículo de entrada
-        if (entradaExistente) {
+        // Veículos de entrada
+        if (entradasExistentes.length > 0) {
           setTemEntrada(true)
-          const { debitos, ...resto } = entradaExistente
-          setDadosEntrada(resto)
-          if (debitos && debitos.length > 0) {
-            setDebitosEntrada(
-              debitos.map((d) => ({ id: crypto.randomUUID(), descricao: d.descricao, valor: String(d.valor) }))
-            )
-          }
+          const items: EntradaItem[] = entradasExistentes.map((ev, idx) => {
+            const { debitos, id, sale_id, criado_em, posicao, ...dadosRaw } = ev as Record<string, unknown> & typeof ev
+            const { crlv, cnh } = tiposCrlvCnh(idx)
+            const docsVeiculo = docsExistentes.filter((d) => d.tipo === crlv || d.tipo === cnh)
+            return {
+              localId: String(id ?? crypto.randomUUID()),
+              dados: dadosRaw as Partial<DadosEntradaVeiculo>,
+              debitos: ((debitos as DebitoEntrada[]) ?? []).map((d) => ({
+                id: crypto.randomUUID(),
+                descricao: d.descricao,
+                valor: String(d.valor),
+              })),
+              documentos: docsVeiculo,
+              erros: {},
+              erroDoc: null,
+              buscandoPlaca: false,
+              erroBuscaPlaca: null,
+            }
+          })
+          setEntradasVeiculo(items)
         } else {
           setTemEntrada(false)
         }
@@ -581,29 +617,45 @@ export default function NovaVenda() {
     }
   }
 
-  async function buscarDadosPorPlacaEntrada() {
-    const placa = dadosEntrada.placa ?? ''
+  function atualizarEntrada(idx: number, campos: Partial<EntradaItem>) {
+    setEntradasVeiculo((prev) => prev.map((e, i) => (i === idx ? { ...e, ...campos } : e)))
+  }
+
+  function atualizarDadosEntrada(idx: number, campos: Partial<DadosEntradaVeiculo>) {
+    setEntradasVeiculo((prev) =>
+      prev.map((e, i) => (i === idx ? { ...e, dados: { ...e.dados, ...campos } } : e))
+    )
+  }
+
+  function adicionarEntrada() {
+    setEntradasVeiculo((prev) => [...prev, novaEntradaItem()])
+  }
+
+  function removerEntrada(idx: number) {
+    setEntradasVeiculo((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  async function buscarDadosPorPlacaEntrada(idx: number) {
+    const placa = entradasVeiculo[idx]?.dados.placa ?? ''
     if (placa.replace(/[^A-Za-z0-9]/g, '').length < 7) {
-      setErroBuscaPlacaEntrada('Informe a placa completa antes de buscar.')
+      atualizarEntrada(idx, { erroBuscaPlaca: 'Informe a placa completa antes de buscar.' })
       return
     }
-    setErroBuscaPlacaEntrada(null)
-    setBuscandoPlacaEntrada(true)
+    atualizarEntrada(idx, { erroBuscaPlaca: null, buscandoPlaca: true })
     try {
       const dados = await consultarPlaca(placa)
-      setDadosEntrada((p) => ({
-        ...p,
-        ...(dados.marca          ? { marca: dados.marca }               : {}),
-        ...(dados.modelo         ? { modelo: dados.modelo }             : {}),
+      atualizarDadosEntrada(idx, {
+        ...(dados.marca          ? { marca: dados.marca }                   : {}),
+        ...(dados.modelo         ? { modelo: dados.modelo }                 : {}),
         ...(dados.ano_fabricacao ? { ano_fabricacao: dados.ano_fabricacao } : {}),
-        ...(dados.ano_modelo     ? { ano_modelo: dados.ano_modelo }     : {}),
-        ...(dados.cor            ? { cor: dados.cor }                   : {}),
-        ...(dados.chassi         ? { chassi: dados.chassi }             : {}),
-      }))
+        ...(dados.ano_modelo     ? { ano_modelo: dados.ano_modelo }         : {}),
+        ...(dados.cor            ? { cor: dados.cor }                       : {}),
+        ...(dados.chassi         ? { chassi: dados.chassi }                 : {}),
+      })
     } catch {
-      setErroBuscaPlacaEntrada('Consulta indisponível. Preencha os dados manualmente.')
+      atualizarEntrada(idx, { erroBuscaPlaca: 'Consulta indisponível. Preencha os dados manualmente.' })
     } finally {
-      setBuscandoPlacaEntrada(false)
+      atualizarEntrada(idx, { buscandoPlaca: false })
     }
   }
 
@@ -653,8 +705,8 @@ export default function NovaVenda() {
     }
 
     const totalPagamento    = linhas.reduce((acc, l) => acc + (Number(l.valor) || 0), 0)
-    const valorEntradaBruto = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
-    const totalDebitos      = temEntrada ? debitosEntrada.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0) : 0
+    const valorEntradaBruto = temEntrada ? entradasVeiculo.reduce((acc, e) => acc + (e.dados.valor_estimado ?? 0), 0) : 0
+    const totalDebitos      = temEntrada ? entradasVeiculo.reduce((acc, e) => acc + e.debitos.reduce((a, d) => a + (parseFloat(d.valor) || 0), 0), 0) : 0
     const totalComEntrada   = totalPagamento + valorEntradaBruto - totalDebitos
 
     if (Math.abs(totalComEntrada - dados.valor_venda) > 0.01) {
@@ -667,42 +719,39 @@ export default function NovaVenda() {
     }
     setErroMetodos(null)
 
-    // Validação do veículo de entrada
+    // Validação dos veículos de entrada
     if (temEntrada) {
       const camposObrigatorios: Array<[keyof DadosEntradaVeiculo, string]> = [
-        ['marca', 'Marca'],
-        ['modelo', 'Modelo'],
-        ['versao', 'Versão'],
-        ['cor', 'Cor'],
-        ['ano_fabricacao', 'Ano Fabricação'],
-        ['ano_modelo', 'Ano Modelo'],
-        ['placa', 'Placa'],
-        ['quilometragem', 'Quilometragem'],
-        ['valor_estimado', 'Valor Estimado'],
-        ['proprietario_nome', 'Nome do Proprietário'],
+        ['marca', 'Marca'], ['modelo', 'Modelo'], ['versao', 'Versão'], ['cor', 'Cor'],
+        ['ano_fabricacao', 'Ano Fabricação'], ['ano_modelo', 'Ano Modelo'],
+        ['placa', 'Placa'], ['quilometragem', 'Quilometragem'],
+        ['valor_estimado', 'Valor Estimado'], ['proprietario_nome', 'Nome do Proprietário'],
       ]
-      const erros: Record<string, string> = {}
-      for (const [campo, label] of camposObrigatorios) {
-        const v = dadosEntrada[campo]
-        if (v === undefined || v === null || String(v).trim() === '' || Number(v) === 0 && campo !== 'quilometragem') {
-          erros[campo] = `${label} é obrigatório`
+      let hasErrors = false
+      const entradasValidadas = entradasVeiculo.map((entrada, idx) => {
+        const erros: Record<string, string> = {}
+        for (const [campo, label] of camposObrigatorios) {
+          const v = entrada.dados[campo]
+          if (v === undefined || v === null || String(v).trim() === '' || (Number(v) === 0 && campo !== 'quilometragem')) {
+            erros[campo] = `${label} é obrigatório`
+          }
         }
-      }
-      const temCrlv = documentosEntrada.some((d) => d.tipo === 'crlv_entrada')
-      const temCnh  = documentosEntrada.some((d) => d.tipo === 'cnh_rg_entrada')
-      let erroDoc: string | null = null
-      if (!temCrlv && !temCnh) erroDoc = 'Anexe o CRLV e a CNH/RG do proprietário.'
-      else if (!temCrlv)       erroDoc = 'Anexe o CRLV do veículo.'
-      else if (!temCnh)        erroDoc = 'Anexe a CNH ou RG do proprietário.'
-
-      if (Object.keys(erros).length > 0 || erroDoc) {
-        setErrosEntrada(erros)
-        setErroDocEntrada(erroDoc)
+        const { crlv, cnh } = tiposCrlvCnh(idx)
+        const temCrlv = entrada.documentos.some((d) => d.tipo === crlv)
+        const temCnh  = entrada.documentos.some((d) => d.tipo === cnh)
+        let erroDoc: string | null = null
+        if (!temCrlv && !temCnh) erroDoc = 'Anexe o CRLV e a CNH/RG do proprietário.'
+        else if (!temCrlv)       erroDoc = 'Anexe o CRLV do veículo.'
+        else if (!temCnh)        erroDoc = 'Anexe a CNH ou RG do proprietário.'
+        if (Object.keys(erros).length > 0 || erroDoc) hasErrors = true
+        return { ...entrada, erros, erroDoc }
+      })
+      if (hasErrors) {
+        setEntradasVeiculo(entradasValidadas)
         document.getElementById('secao-entrada')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
         return
       }
-      setErrosEntrada({})
-      setErroDocEntrada(null)
+      setEntradasVeiculo((prev) => prev.map((e) => ({ ...e, erros: {}, erroDoc: null })))
     }
 
     // Na criação exige mínimo de fotos; na edição pula (já foram enviadas antes)
@@ -769,19 +818,23 @@ export default function NovaVenda() {
       const fotasNovas = fotos.filter((f) => !fotosNoBancoIds.current.has(f.id))
       if (fotasNovas.length) await salvarFotosNoBanco(fotasNovas)
 
-      // Salva apenas documentos NOVOS
-      const docsNovos = documentosEntrada.filter((d) => !docsNoBancoIds.current.has(d.id))
-      if (docsNovos.length) await salvarDocumentosNoBanco(docsNovos)
+      // Salva veículos de entrada e documentos novos
+      if (temEntrada) {
+        const veiculosParaSalvar = entradasVeiculo
+          .filter((e) => e.dados.marca && e.dados.modelo && e.dados.placa)
+          .map((e, i) => ({
+            dados: e.dados as DadosEntradaVeiculo,
+            debitos: e.debitos
+              .filter((d) => d.descricao.trim() || parseFloat(d.valor) > 0)
+              .map((d) => ({ descricao: d.descricao, valor: parseFloat(d.valor) || 0 })),
+            posicao: i,
+          }))
+        if (veiculosParaSalvar.length) await salvarEntradasVeiculo(saleId, veiculosParaSalvar)
 
-      // Veículo de entrada (upsert — funciona para criação e edição)
-      if (temEntrada && dadosEntrada.marca && dadosEntrada.modelo && dadosEntrada.placa) {
-        const debitosParaSalvar: DebitoEntrada[] = debitosEntrada
-          .filter((d) => d.descricao.trim() || parseFloat(d.valor) > 0)
-          .map((d) => ({ descricao: d.descricao, valor: parseFloat(d.valor) || 0 }))
-        await salvarEntradaVeiculo(saleId, {
-          ...(dadosEntrada as DadosEntradaVeiculo),
-          debitos: debitosParaSalvar,
-        })
+        const todosDocsNovos = entradasVeiculo.flatMap((e) =>
+          e.documentos.filter((d) => !docsNoBancoIds.current.has(d.id))
+        )
+        if (todosDocsNovos.length) await salvarDocumentosNoBanco(todosDocsNovos)
       }
 
       await carregar(usuario.id)
@@ -795,8 +848,8 @@ export default function NovaVenda() {
 
   // Calculadora ao vivo
   const totalPagamento      = linhas.reduce((acc, l) => acc + (Number(l.valor) || 0), 0)
-  const valorEntradaCalc    = temEntrada ? (dadosEntrada.valor_estimado ?? 0) : 0
-  const totalDebitosEntrada = temEntrada ? debitosEntrada.reduce((acc, d) => acc + (parseFloat(d.valor) || 0), 0) : 0
+  const valorEntradaCalc    = temEntrada ? entradasVeiculo.reduce((acc, e) => acc + (e.dados.valor_estimado ?? 0), 0) : 0
+  const totalDebitosEntrada = temEntrada ? entradasVeiculo.reduce((acc, e) => acc + e.debitos.reduce((a, d) => a + (parseFloat(d.valor) || 0), 0), 0) : 0
   const valorEntradaLiquida = valorEntradaCalc - totalDebitosEntrada
   const totalComEntrada     = totalPagamento + valorEntradaLiquida
   const valorVenda          = Number(watch('valor_venda')) || 0
@@ -1199,194 +1252,230 @@ export default function NovaVenda() {
 
           {temEntrada && (
             <div className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Placa *</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      placeholder="ABC1234"
-                      className="uppercase flex-1"
-                      value={dadosEntrada.placa ?? ''}
-                      onChange={(e) => {
-                        setDadosEntrada((p) => ({ ...p, placa: e.target.value.toUpperCase() }))
-                        setErroBuscaPlacaEntrada(null)
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={buscarDadosPorPlacaEntrada}
-                      disabled={buscandoPlacaEntrada}
-                      className="flex-shrink-0 gap-1.5 px-3"
-                    >
-                      {buscandoPlacaEntrada
-                        ? <Loader2 size={14} className="animate-spin" />
-                        : <Search size={14} />}
-                      {buscandoPlacaEntrada ? 'Buscando…' : 'Buscar'}
-                    </Button>
-                  </div>
-                  {errosEntrada.placa && <p className="text-xs text-red-600 mt-1">{errosEntrada.placa}</p>}
-                  {erroBuscaPlacaEntrada && (
-                    <p className="flex items-center gap-1 text-xs text-amber-600 mt-1">
-                      <AlertCircle size={12} />{erroBuscaPlacaEntrada}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Marca *</Label>
-                  <Input placeholder="Ex: Fiat" value={dadosEntrada.marca ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, marca: e.target.value }))} />
-                  {errosEntrada.marca && <p className="text-xs text-red-600 mt-1">{errosEntrada.marca}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Modelo *</Label>
-                  <Input placeholder="Ex: Uno" value={dadosEntrada.modelo ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, modelo: e.target.value }))} />
-                  {errosEntrada.modelo && <p className="text-xs text-red-600 mt-1">{errosEntrada.modelo}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Versão *</Label>
-                  <Input placeholder="Ex: Way 1.0" value={dadosEntrada.versao ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, versao: e.target.value }))} />
-                  {errosEntrada.versao && <p className="text-xs text-red-600 mt-1">{errosEntrada.versao}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Cor *</Label>
-                  <Input placeholder="Ex: Branca" value={dadosEntrada.cor ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, cor: e.target.value }))} />
-                  {errosEntrada.cor && <p className="text-xs text-red-600 mt-1">{errosEntrada.cor}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Fabricação *</Label>
-                  <Input type="number" placeholder="2018" value={dadosEntrada.ano_fabricacao ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, ano_fabricacao: Number(e.target.value) }))} />
-                  {errosEntrada.ano_fabricacao && <p className="text-xs text-red-600 mt-1">{errosEntrada.ano_fabricacao}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Modelo *</Label>
-                  <Input type="number" placeholder="2019" value={dadosEntrada.ano_modelo ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, ano_modelo: Number(e.target.value) }))} />
-                  {errosEntrada.ano_modelo && <p className="text-xs text-red-600 mt-1">{errosEntrada.ano_modelo}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Quilometragem *</Label>
-                  <Input type="number" placeholder="85000" value={dadosEntrada.quilometragem ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, quilometragem: Number(e.target.value) }))} />
-                  {errosEntrada.quilometragem && <p className="text-xs text-red-600 mt-1">{errosEntrada.quilometragem}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Valor Estimado (R$) *</Label>
-                  <InputMoeda
-                    value={dadosEntrada.valor_estimado != null ? String(dadosEntrada.valor_estimado) : ''}
-                    onChange={(v) => setDadosEntrada((p) => ({ ...p, valor_estimado: v ? parseFloat(v) : undefined }))}
-                  />
-                  {errosEntrada.valor_estimado && <p className="text-xs text-red-600 mt-1">{errosEntrada.valor_estimado}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Nome do Proprietário *</Label>
-                  <Input placeholder="Nome completo" value={dadosEntrada.proprietario_nome ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, proprietario_nome: e.target.value }))} />
-                  {errosEntrada.proprietario_nome && <p className="text-xs text-red-600 mt-1">{errosEntrada.proprietario_nome}</p>}
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">CPF do Proprietário</Label>
-                  <Input placeholder="000.000.000-00" value={dadosEntrada.proprietario_cpf ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, proprietario_cpf: e.target.value }))} />
-                </div>
-                <div>
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Renavam</Label>
-                  <Input placeholder="00000000000" value={dadosEntrada.renavam ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, renavam: e.target.value }))} />
-                </div>
-                <div className="col-span-2">
-                  <Label className="text-xs font-medium text-gray-700 mb-1 block">Observações</Label>
-                  <Input placeholder="Condições do veículo, detalhes relevantes..." value={dadosEntrada.observacoes ?? ''}
-                    onChange={(e) => setDadosEntrada((p) => ({ ...p, observacoes: e.target.value }))} />
-                </div>
-              </div>
-
-              {/* Débitos do veículo de entrada */}
-              <div className="border-t border-gray-100 pt-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Débitos do Veículo</p>
-                  <button
-                    type="button"
-                    onClick={() => setDebitosEntrada((prev) => [
-                      ...prev,
-                      { id: crypto.randomUUID(), descricao: '', valor: '' },
-                    ])}
-                    className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
-                  >
-                    <Plus size={13} />
-                    Adicionar débito
-                  </button>
-                </div>
-
-                {debitosEntrada.length === 0 && (
-                  <p className="text-xs text-gray-400">Nenhum débito. Clique em "Adicionar débito" se houver IPVA, multas ou outros encargos.</p>
-                )}
-
-                <div className="space-y-2">
-                  {debitosEntrada.map((d) => (
-                    <div key={d.id} className="flex gap-2 items-center">
-                      <Input
-                        placeholder="Descrição (ex: IPVA, multas...)"
-                        value={d.descricao}
-                        onChange={(e) => setDebitosEntrada((prev) =>
-                          prev.map((x) => x.id === d.id ? { ...x, descricao: e.target.value } : x)
-                        )}
-                        className="flex-1 text-sm"
-                      />
-                      <div className="w-32 shrink-0">
-                        <InputMoeda
-                          value={d.valor}
-                          onChange={(v) => setDebitosEntrada((prev) =>
-                            prev.map((x) => x.id === d.id ? { ...x, valor: v } : x)
-                          )}
-                        />
+              {entradasVeiculo.map((entrada, idx) => {
+                const { crlv: tipoCrlv, cnh: tipoCnh } = tiposCrlvCnh(idx)
+                return (
+                  <div key={entrada.localId} className={`space-y-4 ${entradasVeiculo.length > 1 ? 'border border-gray-200 rounded-xl p-4' : ''}`}>
+                    {entradasVeiculo.length > 1 && (
+                      <div className="flex items-center justify-between">
+                        <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Veículo de Entrada {idx + 1}</p>
+                        <button
+                          type="button"
+                          onClick={() => removerEntrada(idx)}
+                          className="flex items-center gap-1 text-xs text-red-500 hover:text-red-700 font-medium transition-colors"
+                        >
+                          <X size={13} />
+                          Remover
+                        </button>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setDebitosEntrada((prev) => prev.filter((x) => x.id !== d.id))}
-                        className="p-1.5 text-gray-400 hover:text-red-500 transition-colors shrink-0"
-                      >
-                        <X size={15} />
-                      </button>
+                    )}
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Placa *</Label>
+                        <div className="flex gap-2">
+                          <Input
+                            placeholder="ABC1234"
+                            className="uppercase flex-1"
+                            value={entrada.dados.placa ?? ''}
+                            onChange={(e) => {
+                              atualizarDadosEntrada(idx, { placa: e.target.value.toUpperCase() })
+                              atualizarEntrada(idx, { erroBuscaPlaca: null })
+                            }}
+                          />
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => buscarDadosPorPlacaEntrada(idx)}
+                            disabled={entrada.buscandoPlaca}
+                            className="flex-shrink-0 gap-1.5 px-3"
+                          >
+                            {entrada.buscandoPlaca ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
+                            {entrada.buscandoPlaca ? 'Buscando…' : 'Buscar'}
+                          </Button>
+                        </div>
+                        {entrada.erros.placa && <p className="text-xs text-red-600 mt-1">{entrada.erros.placa}</p>}
+                        {entrada.erroBuscaPlaca && (
+                          <p className="flex items-center gap-1 text-xs text-amber-600 mt-1">
+                            <AlertCircle size={12} />{entrada.erroBuscaPlaca}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Marca *</Label>
+                        <Input placeholder="Ex: Fiat" value={entrada.dados.marca ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { marca: e.target.value })} />
+                        {entrada.erros.marca && <p className="text-xs text-red-600 mt-1">{entrada.erros.marca}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Modelo *</Label>
+                        <Input placeholder="Ex: Uno" value={entrada.dados.modelo ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { modelo: e.target.value })} />
+                        {entrada.erros.modelo && <p className="text-xs text-red-600 mt-1">{entrada.erros.modelo}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Versão *</Label>
+                        <Input placeholder="Ex: Way 1.0" value={entrada.dados.versao ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { versao: e.target.value })} />
+                        {entrada.erros.versao && <p className="text-xs text-red-600 mt-1">{entrada.erros.versao}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Cor *</Label>
+                        <Input placeholder="Ex: Branca" value={entrada.dados.cor ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { cor: e.target.value })} />
+                        {entrada.erros.cor && <p className="text-xs text-red-600 mt-1">{entrada.erros.cor}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Fabricação *</Label>
+                        <Input type="number" placeholder="2018" value={entrada.dados.ano_fabricacao ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { ano_fabricacao: Number(e.target.value) })} />
+                        {entrada.erros.ano_fabricacao && <p className="text-xs text-red-600 mt-1">{entrada.erros.ano_fabricacao}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Ano Modelo *</Label>
+                        <Input type="number" placeholder="2019" value={entrada.dados.ano_modelo ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { ano_modelo: Number(e.target.value) })} />
+                        {entrada.erros.ano_modelo && <p className="text-xs text-red-600 mt-1">{entrada.erros.ano_modelo}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Quilometragem *</Label>
+                        <Input type="number" placeholder="85000" value={entrada.dados.quilometragem ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { quilometragem: Number(e.target.value) })} />
+                        {entrada.erros.quilometragem && <p className="text-xs text-red-600 mt-1">{entrada.erros.quilometragem}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Valor Estimado (R$) *</Label>
+                        <InputMoeda
+                          value={entrada.dados.valor_estimado != null ? String(entrada.dados.valor_estimado) : ''}
+                          onChange={(v) => atualizarDadosEntrada(idx, { valor_estimado: v ? parseFloat(v) : undefined })}
+                        />
+                        {entrada.erros.valor_estimado && <p className="text-xs text-red-600 mt-1">{entrada.erros.valor_estimado}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Nome do Proprietário *</Label>
+                        <Input placeholder="Nome completo" value={entrada.dados.proprietario_nome ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { proprietario_nome: e.target.value })} />
+                        {entrada.erros.proprietario_nome && <p className="text-xs text-red-600 mt-1">{entrada.erros.proprietario_nome}</p>}
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">CPF do Proprietário</Label>
+                        <Input placeholder="000.000.000-00" value={entrada.dados.proprietario_cpf ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { proprietario_cpf: e.target.value })} />
+                      </div>
+                      <div>
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Renavam</Label>
+                        <Input placeholder="00000000000" value={entrada.dados.renavam ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { renavam: e.target.value })} />
+                      </div>
+                      <div className="col-span-2">
+                        <Label className="text-xs font-medium text-gray-700 mb-1 block">Observações</Label>
+                        <Input placeholder="Condições do veículo, detalhes relevantes..." value={entrada.dados.observacoes ?? ''}
+                          onChange={(e) => atualizarDadosEntrada(idx, { observacoes: e.target.value })} />
+                      </div>
                     </div>
-                  ))}
-                </div>
 
-                {totalDebitosEntrada > 0 && (
-                  <p className="text-xs text-amber-700 font-medium mt-2">
-                    Total de débitos: {formatarMoeda(totalDebitosEntrada)} — Entrada líquida: {formatarMoeda(valorEntradaLiquida)}
-                  </p>
-                )}
-              </div>
+                    {/* Débitos */}
+                    <div className="border-t border-gray-100 pt-4">
+                      <div className="flex items-center justify-between mb-3">
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Débitos do Veículo</p>
+                        <button
+                          type="button"
+                          onClick={() => atualizarEntrada(idx, {
+                            debitos: [...entrada.debitos, { id: crypto.randomUUID(), descricao: '', valor: '' }],
+                          })}
+                          className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                        >
+                          <Plus size={13} />
+                          Adicionar débito
+                        </button>
+                      </div>
+                      {entrada.debitos.length === 0 && (
+                        <p className="text-xs text-gray-400">Nenhum débito. Clique em "Adicionar débito" se houver IPVA, multas ou outros encargos.</p>
+                      )}
+                      <div className="space-y-2">
+                        {entrada.debitos.map((d) => (
+                          <div key={d.id} className="flex gap-2 items-center">
+                            <Input
+                              placeholder="Descrição (ex: IPVA, multas...)"
+                              value={d.descricao}
+                              onChange={(e) => atualizarEntrada(idx, {
+                                debitos: entrada.debitos.map((x) => x.id === d.id ? { ...x, descricao: e.target.value } : x),
+                              })}
+                              className="flex-1 text-sm"
+                            />
+                            <div className="w-32 shrink-0">
+                              <InputMoeda
+                                value={d.valor}
+                                onChange={(v) => atualizarEntrada(idx, {
+                                  debitos: entrada.debitos.map((x) => x.id === d.id ? { ...x, valor: v } : x),
+                                })}
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => atualizarEntrada(idx, {
+                                debitos: entrada.debitos.filter((x) => x.id !== d.id),
+                              })}
+                              className="p-1.5 text-gray-400 hover:text-red-500 transition-colors shrink-0"
+                            >
+                              <X size={15} />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                      {entrada.debitos.length > 0 && (
+                        <p className="text-xs text-amber-700 font-medium mt-2">
+                          Débitos: {formatarMoeda(entrada.debitos.reduce((a, d) => a + (parseFloat(d.valor) || 0), 0))} —
+                          Entrada líquida: {formatarMoeda((entrada.dados.valor_estimado ?? 0) - entrada.debitos.reduce((a, d) => a + (parseFloat(d.valor) || 0), 0))}
+                        </p>
+                      )}
+                    </div>
 
-              <div className="border-t border-gray-100 pt-4 space-y-4">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Documentos *</p>
-                <UploadDocumento
-                  saleId={saleId}
-                  tipo="crlv_entrada"
-                  label="CRLV — Certificado de Registro e Licenciamento do Veículo *"
-                  documentos={documentosEntrada}
-                  onChange={setDocumentosEntrada}
-                />
-                <UploadDocumento
-                  saleId={saleId}
-                  tipo="cnh_rg_entrada"
-                  label="CNH ou RG do Proprietário *"
-                  documentos={documentosEntrada}
-                  onChange={setDocumentosEntrada}
-                />
-                {erroDocEntrada && (
-                  <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">
-                    <AlertCircle size={14} />
-                    {erroDocEntrada}
+                    {/* Documentos */}
+                    <div className="border-t border-gray-100 pt-4 space-y-4">
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Documentos *</p>
+                      <UploadDocumento
+                        saleId={saleId}
+                        tipo={tipoCrlv}
+                        label="CRLV — Certificado de Registro e Licenciamento do Veículo *"
+                        documentos={entrada.documentos}
+                        onChange={(docs) => atualizarEntrada(idx, { documentos: docs })}
+                      />
+                      <UploadDocumento
+                        saleId={saleId}
+                        tipo={tipoCnh}
+                        label="CNH ou RG do Proprietário *"
+                        documentos={entrada.documentos}
+                        onChange={(docs) => atualizarEntrada(idx, { documentos: docs })}
+                      />
+                      {entrada.erroDoc && (
+                        <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg">
+                          <AlertCircle size={14} />
+                          {entrada.erroDoc}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                )}
-              </div>
+                )
+              })}
+
+              {/* Botão adicionar veículo */}
+              <button
+                type="button"
+                onClick={adicionarEntrada}
+                className="flex items-center gap-2 w-full py-2.5 border border-dashed border-blue-300 hover:border-blue-500 hover:bg-blue-50 rounded-xl text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors justify-center"
+              >
+                <Plus size={15} />
+                Adicionar outro veículo de entrada
+              </button>
+
+              {totalDebitosEntrada > 0 && entradasVeiculo.length > 1 && (
+                <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-2.5 text-xs text-amber-800">
+                  <span className="font-semibold">Total geral das entradas:</span>{' '}
+                  Bruto {formatarMoeda(valorEntradaCalc)} — Débitos {formatarMoeda(totalDebitosEntrada)} — Líquido {formatarMoeda(valorEntradaLiquida)}
+                </div>
+              )}
             </div>
           )}
         </div>

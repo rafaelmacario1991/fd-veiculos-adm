@@ -81,7 +81,7 @@ export default function ContratoVenda({ venda, editavel = false }: Props) {
   const hora = `${String(agora.getHours()).padStart(2,'0')}:${String(agora.getMinutes()).padStart(2,'0')}`
   const dataExtenso = fmtDataContrato(agora.toISOString())
 
-  const ei = venda.veiculo_entrada
+  const veiculosEntrada = venda.veiculos_entrada ?? []
 
   return (
     <div className="contrato-print-area" style={{ fontFamily: 'Arial, sans-serif', fontSize: '10px', color: '#000', background: '#fff', padding: '20mm 15mm', maxWidth: '210mm', margin: '0 auto', lineHeight: 1.4 }}>
@@ -205,9 +205,9 @@ export default function ContratoVenda({ venda, editavel = false }: Props) {
         )}
       </Secao>
 
-      {/* ── VEÍCULO DE ENTRADA ── */}
-      {ei && (
-        <Secao titulo="VEÍCULO COMPRADO (ENTRADA / TROCA)">
+      {/* ── VEÍCULOS DE ENTRADA ── */}
+      {veiculosEntrada.map((ei, idx) => (
+        <Secao key={idx} titulo={veiculosEntrada.length > 1 ? `VEÍCULO COMPRADO ${idx + 1} (ENTRADA / TROCA)` : 'VEÍCULO COMPRADO (ENTRADA / TROCA)'}>
           <LinhaContrato rotulo="Veículo" valor={`${ei.marca?.toUpperCase()} ${ei.modelo?.toUpperCase()} ${ei.versao?.toUpperCase() ?? ''}`.trim()} editavel={editavel} />
           <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: '2px' }}>
             <LinhaContrato rotulo="Placa" valor={ei.placa?.toUpperCase()} editavel={editavel} />
@@ -243,7 +243,7 @@ export default function ContratoVenda({ venda, editavel = false }: Props) {
             </div>
           )}
         </Secao>
-      )}
+      ))}
 
       {/* ── CLÁUSULAS ── */}
       <Secao titulo="CLÁUSULAS CONTRATUAIS" semQuebra>
