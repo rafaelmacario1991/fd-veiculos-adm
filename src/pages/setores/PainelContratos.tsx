@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useRequererPerfil } from '@/hooks/useAuth'
 import { useNavigate } from 'react-router-dom'
-import { listarAtividadesDoSetor, concluirAtividade, concluirVenda, type AtividadeComVenda } from '@/services/setores'
+import { listarAtividadesDoSetor, concluirAtividade, concluirVenda, atualizarDadosAtividade, type AtividadeComVenda } from '@/services/setores'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
 import FiltrosPainel, { STATUS_ATIVIDADE, type FiltrosPainelState } from '@/components/ui/FiltrosPainel'
-import { FileText, CheckCircle2, Eye, History, Trash2 } from 'lucide-react'
+import { FileText, CheckCircle2, Eye, History, Trash2, CreditCard } from 'lucide-react'
 import type { VendaListagem } from '@/services/vendas'
 import SecaoTarefasSetor from '@/components/tarefas/SecaoTarefasSetor'
 import { useAuthStore } from '@/store/authStore'
@@ -51,6 +51,28 @@ export default function PainelContratos() {
     }
   }
 
+  async function registrarPagamentoSolicitado(atividade: AtividadeComVenda) {
+    setProcessando(`pag-${atividade.id}`)
+    try {
+      await atualizarDadosAtividade(atividade.id, {
+        pagamento_solicitado: true,
+        pagamento_solicitado_em: new Date().toISOString(),
+      })
+      await carregar()
+    } finally {
+      setProcessando(null)
+    }
+  }
+
+  function temFinanciamento(atividade: AtividadeComVenda): boolean {
+    const formas = atividade.sales.formas_pagamento_json
+    return Array.isArray(formas) && formas.some((f) => f.tipo === 'financiamento')
+  }
+
+  function pagamentoJaSolicitado(atividade: AtividadeComVenda): boolean {
+    return atividade.dados_json?.pagamento_solicitado === true
+  }
+
   async function handleExcluir(id: string) {
     try {
       await excluirAtividadeSetor(id)
@@ -91,10 +113,31 @@ export default function PainelContratos() {
                       onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
                       onExcluir={isSupervisor ? () => handleExcluir(a.id) : undefined}
                     >
-                      <Button size="sm" onClick={() => formalizarContrato(a)} disabled={processando === a.id}>
-                        <FileText size={13} className="mr-1.5" />
-                        {processando === a.id ? 'Processando...' : 'Formalizar Contrato'}
-                      </Button>
+                      <div className="flex flex-col gap-1.5 items-end">
+                        {temFinanciamento(a) && (
+                          pagamentoJaSolicitado(a) ? (
+                            <span className="flex items-center gap-1.5 text-xs font-medium text-green-700 bg-green-50 border border-green-200 rounded-full px-2.5 py-1">
+                              <CreditCard size={11} />
+                              Pagamento Solicitado
+                            </span>
+                          ) : (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-purple-300 text-purple-700 hover:bg-purple-50"
+                              onClick={() => registrarPagamentoSolicitado(a)}
+                              disabled={processando === `pag-${a.id}`}
+                            >
+                              <CreditCard size={13} className="mr-1.5" />
+                              {processando === `pag-${a.id}` ? 'Registrando...' : 'Pagamento Solicitado'}
+                            </Button>
+                          )
+                        )}
+                        <Button size="sm" onClick={() => formalizarContrato(a)} disabled={processando === a.id}>
+                          <FileText size={13} className="mr-1.5" />
+                          {processando === a.id ? 'Processando...' : 'Formalizar Contrato'}
+                        </Button>
+                      </div>
                     </CartaoSetor>
                   ))}
                 </div>

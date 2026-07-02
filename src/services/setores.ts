@@ -68,6 +68,24 @@ export async function concluirAtividadePorVenda(saleId: string, setor: SetorAtiv
   }
 }
 
+export async function atualizarDadosAtividade(
+  atividadeId: string,
+  campos: Record<string, unknown>
+): Promise<void> {
+  const { data: atual } = await supabase
+    .from('sector_activities')
+    .select('dados_json')
+    .eq('id', atividadeId)
+    .single()
+
+  const { error } = await supabase
+    .from('sector_activities')
+    .update({ dados_json: { ...(atual?.dados_json as Record<string, unknown> ?? {}), ...campos } })
+    .eq('id', atividadeId)
+
+  if (error) throw error
+}
+
 export async function concluirVenda(vendaId: string): Promise<void> {
   const { error } = await supabase
     .from('sales')
