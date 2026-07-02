@@ -52,19 +52,32 @@ export async function listarVendedores(): Promise<Vendedor[]> {
 }
 
 export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQuadro> {
+  // Busca todas as vendas não canceladas. Filtragem por data ocorre no cliente
+  // usando COALESCE(data_venda, criado_em::date), garantindo que vendas sem
+  // data_venda explícita (submetidas pelo vendedor) não sejam excluídas.
   let query = supabase
     .from('sales')
-    .select('id, criado_em, data_venda, valor_venda, forma_pagamento, banco_financeira, formas_pagamento_json, vendedor_id, users!sales_vendedor_id_fkey(nome)')
-    .order('data_venda', { ascending: true })
+    .select('id, criado_em, data_venda, valor_venda, status, forma_pagamento, banco_financeira, formas_pagamento_json, vendedor_id, users!sales_vendedor_id_fkey(nome)')
+    .neq('status', 'cancelada')
+    .order('criado_em', { ascending: true })
 
-  if (filtros.de)        query = query.gte('data_venda', filtros.de)
-  if (filtros.ate)       query = query.lte('data_venda', filtros.ate)
   if (filtros.vendedorId) query = query.eq('vendedor_id', filtros.vendedorId)
 
   const { data, error } = await query
   if (error) throw error
 
-  const vendas: VendaAnalytics[] = (data ?? []).map((v) => ({
+  // Data efetiva = data_venda (campo opcional) ?? data de criação da venda
+  const dataEfetiva = (v: { data_venda: string | null; criado_em: string }) =>
+    v.data_venda ?? v.criado_em.split('T')[0]
+
+  const todos = (data ?? []).filter((v) => {
+    const d = dataEfetiva(v as unknown as { data_venda: string | null; criado_em: string })
+    if (filtros.de  && d < filtros.de)  return false
+    if (filtros.ate && d > filtros.ate) return false
+    return true
+  })
+
+  const vendas: VendaAnalytics[] = todos.map((v) => ({
     ...(v as unknown as VendaAnalytics),
     vendedor_nome: ((v as unknown as { users: { nome: string } }).users?.nome) ?? '—',
   }))
@@ -125,7 +138,7 @@ export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQ
   // Por dia
   const diaMap = new Map<string, { qtd: number; valor: number }>()
   for (const v of vendas) {
-    const dia = (v as unknown as { data_venda: string | null }).data_venda ?? v.criado_em.split('T')[0]
+    const dia = dataEfetiva(v as unknown as { data_venda: string | null; criado_em: string })
     const cur = diaMap.get(dia) ?? { qtd: 0, valor: 0 }
     diaMap.set(dia, { qtd: cur.qtd + 1, valor: cur.valor + v.valor_venda })
   }
@@ -136,8 +149,8 @@ export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQ
   // Por semana (ISO week label)
   const semMap = new Map<string, { qtd: number; valor: number }>()
   for (const v of vendas) {
-    const dv = (v as unknown as { data_venda: string | null }).data_venda
-    const d = new Date(dv ? dv + 'T12:00:00' : v.criado_em)
+    const dv = dataEfetiva(v as unknown as { data_venda: string | null; criado_em: string })
+    const d = new Date(dv + 'T12:00:00')
     const startOfWeek = new Date(d)
     const day = d.getDay()
     startOfWeek.setDate(d.getDate() - (day === 0 ? 6 : day - 1))
