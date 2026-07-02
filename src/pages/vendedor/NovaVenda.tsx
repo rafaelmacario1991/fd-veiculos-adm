@@ -112,7 +112,7 @@ const schema = z.object({
   ),
   data_venda: z.string().min(1, 'Data da Venda obrigatória'),
   data_prevista_entrega: z.string().optional(),
-  canal_venda: z.string().optional(),
+  canal_venda: z.string().min(1, 'Canal de Venda é obrigatório'),
   comprador_nome: z.string().min(1, 'Obrigatório'),
   comprador_cpf_cnpj: z.string().min(11, 'CPF/CNPJ inválido'),
   comprador_rg: z.string().optional(),
@@ -213,9 +213,9 @@ function parseTransferencia(info: string | null | undefined): { tipo: 'cortesia'
 // ---------------------------------------------------------------
 // Componentes auxiliares
 // ---------------------------------------------------------------
-function Secao({ titulo, children }: { titulo: string; children: React.ReactNode }) {
+function Secao({ titulo, children, id }: { titulo: string; children: React.ReactNode; id?: string }) {
   return (
-    <div className="bg-white border border-gray-200 rounded-xl p-5">
+    <div id={id} className="bg-white border border-gray-200 rounded-xl p-5">
       <h2 className="text-sm font-semibold text-gray-900 mb-4 pb-3 border-b border-gray-100">
         {titulo}
       </h2>
@@ -481,6 +481,7 @@ export default function NovaVenda() {
 
   // Documentos do comprador (CNH/RG)
   const [documentosComprador, setDocumentosComprador] = useState<DocumentoEntrada[]>([])
+  const [erroDocComprador, setErroDocComprador] = useState<string | null>(null)
 
   // Veículo de entrada
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
@@ -736,6 +737,14 @@ export default function NovaVenda() {
       return
     }
     setErroMetodos(null)
+
+    // Validação — CNH/RG do comprador obrigatório
+    if (documentosComprador.length === 0) {
+      setErroDocComprador('Anexe a CNH ou RG do comprador.')
+      document.getElementById('secao-cliente')?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+      return
+    }
+    setErroDocComprador(null)
 
     // Validação dos veículos de entrada
     if (temEntrada) {
@@ -1015,8 +1024,8 @@ export default function NovaVenda() {
         </div>
 
         {/* Dados do Cliente */}
-        <Secao titulo="Dados do Cliente">
-          <Campo label="Canal de Venda" erro={errors.canal_venda?.message}>
+        <Secao titulo="Dados do Cliente" id="secao-cliente">
+          <Campo label="Canal de Venda *" erro={errors.canal_venda?.message}>
             <Controller
               name="canal_venda"
               control={control}
@@ -1100,10 +1109,16 @@ export default function NovaVenda() {
             <UploadDocumento
               saleId={saleId}
               tipo="cnh_rg_comprador"
-              label="CNH ou RG do Comprador (opcional)"
+              label="CNH ou RG do Comprador *"
               documentos={documentosComprador}
-              onChange={setDocumentosComprador}
+              onChange={(docs) => { setDocumentosComprador(docs); if (docs.length > 0) setErroDocComprador(null) }}
             />
+            {erroDocComprador && (
+              <div className="flex items-center gap-2 bg-red-50 border border-red-200 text-red-700 text-sm px-3 py-2 rounded-lg mt-2">
+                <AlertCircle size={14} />
+                {erroDocComprador}
+              </div>
+            )}
           </div>
         </Secao>
 
