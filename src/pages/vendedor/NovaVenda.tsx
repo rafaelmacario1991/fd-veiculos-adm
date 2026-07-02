@@ -1126,7 +1126,7 @@ export default function NovaVenda() {
                     <span>{totalDebitosEntrada > 0 ? 'Entrada (bruto):' : 'Veículo de entrada:'}</span>
                     <span>{formatarMoeda(valorEntradaCalc)}</span>
                   </div>
-                  {debitosEntrada.filter((d) => parseFloat(d.valor) > 0).map((d) => (
+                  {entradasVeiculo.flatMap((e) => e.debitos.filter((d) => parseFloat(d.valor) > 0)).map((d) => (
                     <div key={d.id} className="flex justify-between items-center text-amber-600 text-xs mb-1 pl-3">
                       <span>− {d.descricao || 'Débito'}:</span>
                       <span>− {formatarMoeda(parseFloat(d.valor) || 0)}</span>

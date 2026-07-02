@@ -368,10 +368,10 @@ export default function DetalheVenda() {
             {venda.data_prevista_entrega && (
               <InfoLinha label="Prev. de Entrega" valor={new Date(venda.data_prevista_entrega + 'T12:00:00').toLocaleDateString('pt-BR')} />
             )}
-            {venda.veiculo_entrada && (
+            {venda.veiculos_entrada?.length > 0 && (
               <InfoLinha
                 label="Veículo entrada"
-                valor={`${venda.veiculo_entrada.marca} ${venda.veiculo_entrada.modelo} — ${venda.veiculo_entrada.placa}`}
+                valor={venda.veiculos_entrada.map((v) => `${v.marca} ${v.modelo} — ${v.placa}`).join(' / ')}
               />
             )}
           </Passo>
