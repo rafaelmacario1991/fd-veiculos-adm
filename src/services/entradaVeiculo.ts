@@ -162,6 +162,18 @@ export async function listarDocumentosComprador(saleId: string): Promise<Documen
   return (data ?? []) as DocumentoEntrada[]
 }
 
+// Retorna comprovantes de pagamento (comprovante_pix / comprovante_cartao)
+export async function listarComprovantes(saleId: string): Promise<DocumentoEntrada[]> {
+  const { data, error } = await supabase
+    .from('sale_attachments')
+    .select('*')
+    .eq('sale_id', saleId)
+    .or('tipo.eq.comprovante_pix,tipo.eq.comprovante_cartao')
+    .order('criado_em')
+  if (error) throw error
+  return (data ?? []) as DocumentoEntrada[]
+}
+
 export async function deletarDocumentoTemp(doc: DocumentoEntrada): Promise<void> {
   await supabase.storage.from('documentos-entrada').remove([doc.storage_path])
 }

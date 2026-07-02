@@ -30,6 +30,7 @@ import {
   listarDocumentosEntrada,
   listarDocumentosComprador,
   salvarDocumentosNoBanco,
+  listarComprovantes,
   type DadosEntradaVeiculo,
   type DocumentoEntrada,
   type DebitoEntrada,
@@ -485,6 +486,9 @@ export default function NovaVenda() {
   const [documentosComprador, setDocumentosComprador] = useState<DocumentoEntrada[]>([])
   const [erroDocComprador, setErroDocComprador] = useState<string | null>(null)
 
+  // Comprovantes de pagamento (PIX / Cartão)
+  const [comprovantes, setComprovantes] = useState<DocumentoEntrada[]>([])
+
   // Veículo de entrada
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
   const [entradasVeiculo, setEntradasVeiculo] = useState<EntradaItem[]>([novaEntradaItem()])
@@ -513,8 +517,9 @@ export default function NovaVenda() {
       buscarEntradasVeiculo(vendaId),
       listarDocumentosEntrada(vendaId),
       listarDocumentosComprador(vendaId),
+      listarComprovantes(vendaId),
     ])
-      .then(([venda, fotosExistentes, entradasExistentes, docsExistentes, docsCompradorExistentes]) => {
+      .then(([venda, fotosExistentes, entradasExistentes, docsExistentes, docsCompradorExistentes, comprovantesExistentes]) => {
         // Preenche os campos do form
         reset({
           marca:                  venda.marca,
@@ -571,12 +576,14 @@ export default function NovaVenda() {
         fotosNoBancoIds.current = new Set(fotosExistentes.map((f) => f.id))
         setFotos(fotosExistentes)
 
-        // Documentos (entrada + comprador) — rastreia IDs já no banco
+        // Documentos (entrada + comprador + comprovantes) — rastreia IDs já no banco
         docsNoBancoIds.current = new Set([
           ...docsExistentes.map((d) => d.id),
           ...docsCompradorExistentes.map((d) => d.id),
+          ...comprovantesExistentes.map((d) => d.id),
         ])
         setDocumentosComprador(docsCompradorExistentes)
+        setComprovantes(comprovantesExistentes)
 
         // Veículos de entrada
         if (entradasExistentes.length > 0) {
@@ -872,6 +879,10 @@ export default function NovaVenda() {
       // Documentos do comprador (CNH/RG) — salva apenas os novos
       const docsCompradorNovos = documentosComprador.filter((d) => !docsNoBancoIds.current.has(d.id))
       if (docsCompradorNovos.length) await salvarDocumentosNoBanco(docsCompradorNovos)
+
+      // Comprovantes de pagamento (PIX / Cartão) — salva apenas os novos
+      const comprovantesNovos = comprovantes.filter((d) => !docsNoBancoIds.current.has(d.id))
+      if (comprovantesNovos.length) await salvarDocumentosNoBanco(comprovantesNovos)
 
       await carregar(usuario.id)
       navigate(-1)
@@ -1192,6 +1203,31 @@ export default function NovaVenda() {
             <Plus size={15} />
             Adicionar forma de pagamento
           </button>
+
+          {/* Comprovantes de pagamento */}
+          {(linhas.some((l) => l.tipo === 'pix') || linhas.some((l) => l.tipo === 'cartao')) && (
+            <div className="mt-4 pt-4 border-t border-gray-100 space-y-3">
+              <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Comprovantes de Pagamento</p>
+              {linhas.some((l) => l.tipo === 'pix') && (
+                <UploadDocumento
+                  saleId={saleId}
+                  tipo="comprovante_pix"
+                  label="Comprovante PIX"
+                  documentos={comprovantes}
+                  onChange={setComprovantes}
+                />
+              )}
+              {linhas.some((l) => l.tipo === 'cartao') && (
+                <UploadDocumento
+                  saleId={saleId}
+                  tipo="comprovante_cartao"
+                  label="Comprovante Cartão"
+                  documentos={comprovantes}
+                  onChange={setComprovantes}
+                />
+              )}
+            </div>
+          )}
 
           {/* Troco ao cliente */}
           <div className="mt-4 flex flex-wrap items-center gap-3">

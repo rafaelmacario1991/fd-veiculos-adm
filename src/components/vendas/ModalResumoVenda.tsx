@@ -2,8 +2,8 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { VendaListagem } from '@/services/vendas'
 import { listarAnexos, type AnexoVenda } from '@/services/anexos'
-import { buscarEntradasVeiculo, listarDocumentosEntrada, listarDocumentosComprador, type EntradaVeiculo, type DocumentoEntrada } from '@/services/entradaVeiculo'
-import { Car, User, DollarSign, FileText, Camera, ArrowLeftRight, FileCheck, BadgeInfo } from 'lucide-react'
+import { buscarEntradasVeiculo, listarDocumentosEntrada, listarDocumentosComprador, listarComprovantes, type EntradaVeiculo, type DocumentoEntrada } from '@/services/entradaVeiculo'
+import { Car, User, DollarSign, FileText, Camera, ArrowLeftRight, FileCheck, BadgeInfo, Receipt } from 'lucide-react'
 
 interface Props {
   venda: VendaListagem | null
@@ -55,13 +55,18 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
   const [entradas, setEntradas] = useState<EntradaVeiculo[]>([])
   const [docsEntrada, setDocsEntrada] = useState<DocumentoEntrada[]>([])
   const [docsComprador, setDocsComprador] = useState<DocumentoEntrada[]>([])
+  const [comprovantes, setComprovantes] = useState<DocumentoEntrada[]>([])
 
   useEffect(() => {
-    if (!venda) { setFotos([]); setEntradas([]); setDocsEntrada([]); setDocsComprador([]); return }
+    if (!venda) {
+      setFotos([]); setEntradas([]); setDocsEntrada([]); setDocsComprador([]); setComprovantes([])
+      return
+    }
     listarAnexos(venda.id).then(setFotos).catch(() => setFotos([]))
     buscarEntradasVeiculo(venda.id).then(setEntradas).catch(() => setEntradas([]))
     listarDocumentosEntrada(venda.id).then(setDocsEntrada).catch(() => setDocsEntrada([]))
     listarDocumentosComprador(venda.id).then(setDocsComprador).catch(() => setDocsComprador([]))
+    listarComprovantes(venda.id).then(setComprovantes).catch(() => setComprovantes([]))
   }, [venda?.id])
 
   if (!venda) return null
@@ -237,6 +242,32 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
                     >
                       <FileCheck size={13} className="text-green-600 flex-shrink-0" />
                       <span className="font-medium">CNH / RG:</span>
+                      {doc.nome_arquivo}
+                    </a>
+                  ))}
+                </div>
+              </Secao>
+            </>
+          )}
+
+          {/* Comprovantes de Pagamento */}
+          {comprovantes.length > 0 && (
+            <>
+              <hr className="border-gray-100" />
+              <Secao icone={<Receipt size={13} />} titulo="Comprovantes de Pagamento">
+                <div className="col-span-2 space-y-1.5">
+                  {comprovantes.map((doc) => (
+                    <a
+                      key={doc.id}
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs text-blue-700 hover:underline"
+                    >
+                      <FileCheck size={13} className="text-green-600 flex-shrink-0" />
+                      <span className="font-medium">
+                        {doc.tipo === 'comprovante_pix' ? 'PIX' : 'Cartão'}:
+                      </span>
                       {doc.nome_arquivo}
                     </a>
                   ))}
