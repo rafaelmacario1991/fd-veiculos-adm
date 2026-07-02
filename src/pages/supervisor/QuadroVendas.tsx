@@ -43,7 +43,7 @@ function inicioMes() {
 
 const RESUMO_ZERO: ResumoQuadro = {
   totalVendas: 0, valorTotal: 0, ticketMedio: 0,
-  porFormaPagamento: [], porBanco: [], porVendedor: [], porSemana: [], porDia: [],
+  porFormaPagamento: [], porCanal: [], porBanco: [], porVendedor: [], porSemana: [], porDia: [],
 }
 
 const STATUS_LABEL: Record<string, string> = {
@@ -290,16 +290,16 @@ export default function QuadroVendas() {
                   <div className="bg-white border border-gray-200 rounded-xl p-4">
                     <p className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
                       <DollarSign size={15} className="text-green-600" />
-                      Bancos / Financeiras
+                      Canal de Vendas
                     </p>
-                    {dados.porBanco.length === 0 ? (
+                    {dados.porCanal.length === 0 ? (
                       <div className="h-48 flex items-center justify-center text-gray-400 text-sm">Sem dados no período</div>
                     ) : (
                       <ResponsiveContainer width="100%" height={200}>
                         <PieChart>
-                          <Pie data={dados.porBanco} dataKey="qtd" nameKey="banco" cx="50%" cy="50%" outerRadius={70}
-                            label={({ banco, percent }: any) => `${String(banco).length > 8 ? String(banco).slice(0, 8) + '…' : banco} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
-                            {dados.porBanco.map((_, i) => (
+                          <Pie data={dados.porCanal} dataKey="qtd" nameKey="canal" cx="50%" cy="50%" outerRadius={70}
+                            label={({ canal, percent }: any) => `${String(canal).length > 8 ? String(canal).slice(0, 8) + '…' : canal} ${((percent ?? 0) * 100).toFixed(0)}%`} labelLine={false}>
+                            {dados.porCanal.map((_, i) => (
                               <Cell key={i} fill={CORES_PIZZA[i % CORES_PIZZA.length]} />
                             ))}
                           </Pie>
@@ -307,12 +307,12 @@ export default function QuadroVendas() {
                         </PieChart>
                       </ResponsiveContainer>
                     )}
-                    {dados.porBanco.length > 0 && (
+                    {dados.porCanal.length > 0 && (
                       <div className="mt-3 flex flex-wrap gap-3 justify-center">
-                        {dados.porBanco.map((b, i) => (
-                          <div key={b.banco} className="flex items-center gap-1.5">
+                        {dados.porCanal.map((c, i) => (
+                          <div key={c.canal} className="flex items-center gap-1.5">
                             <div className="w-2.5 h-2.5 rounded-full" style={{ backgroundColor: CORES_PIZZA[i % CORES_PIZZA.length] }} />
-                            <span className="text-xs text-gray-600">{b.banco} <span className="font-semibold">{b.qtd}</span></span>
+                            <span className="text-xs text-gray-600">{c.canal} <span className="font-semibold">{c.qtd}</span></span>
                           </div>
                         ))}
                       </div>

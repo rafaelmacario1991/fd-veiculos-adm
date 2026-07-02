@@ -10,8 +10,10 @@ export interface FiltrosQuadro {
 export interface VendaAnalytics {
   id: string
   criado_em: string
+  data_venda: string | null
   valor_venda: number
   forma_pagamento: string
+  canal_venda: string | null
   banco_financeira: string | null
   formas_pagamento_json: { tipo: string; banco?: string; valor?: number }[] | null
   vendedor_id: string
@@ -23,6 +25,7 @@ export interface ResumoQuadro {
   valorTotal: number
   ticketMedio: number
   porFormaPagamento: { forma: string; qtd: number; valor: number }[]
+  porCanal: { canal: string; qtd: number; valor: number }[]
   porBanco: { banco: string; qtd: number; valor: number }[]
   porVendedor: { nome: string; qtd: number; valor: number }[]
   porSemana: { semana: string; qtd: number; valor: number }[]
@@ -103,6 +106,17 @@ export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQ
     forma: formaLabel[f] ?? f, qtd: d.qtd, valor: d.valor,
   })).sort((a, b) => b.qtd - a.qtd)
 
+  // Por canal de venda
+  const canalMap = new Map<string, { qtd: number; valor: number }>()
+  for (const v of vendas) {
+    const c = (v.canal_venda?.trim()) || 'Não informado'
+    const cur = canalMap.get(c) ?? { qtd: 0, valor: 0 }
+    canalMap.set(c, { qtd: cur.qtd + 1, valor: cur.valor + v.valor_venda })
+  }
+  const porCanal = [...canalMap.entries()]
+    .map(([canal, d]) => ({ canal, qtd: d.qtd, valor: d.valor }))
+    .sort((a, b) => b.qtd - a.qtd)
+
   // Por banco/financeira — extrai de formas_pagamento_json (formato novo) ou banco_financeira (legado)
   const bancoMap = new Map<string, { qtd: number; valor: number }>()
   for (const v of vendas) {
@@ -164,5 +178,5 @@ export async function buscarDadosQuadro(filtros: FiltrosQuadro): Promise<ResumoQ
   const porSemana = [...semMap.entries()]
     .map(([semana, d]) => ({ semana, qtd: d.qtd, valor: d.valor }))
 
-  return { totalVendas, valorTotal, ticketMedio, porFormaPagamento, porBanco, porVendedor, porSemana, porDia }
+  return { totalVendas, valorTotal, ticketMedio, porFormaPagamento, porCanal, porBanco, porVendedor, porSemana, porDia }
 }
