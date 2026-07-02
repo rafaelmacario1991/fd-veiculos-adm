@@ -3,7 +3,7 @@ import type { PendenciaFinanceira } from '@/types'
 
 export async function atualizarConfirmacoesFinanceiro(
   atividadeId: string,
-  confirmacoes: boolean[]
+  confirmacoes: Record<string, boolean>
 ): Promise<void> {
   const { error } = await supabase
     .from('sector_activities')

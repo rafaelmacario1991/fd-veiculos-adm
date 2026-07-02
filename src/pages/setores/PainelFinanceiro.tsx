@@ -8,6 +8,7 @@ import {
   encerrarPendenciaFinanceira,
   atualizarConfirmacoesFinanceiro,
 } from '@/services/financeiro'
+import { buscarEntradasVeiculo, type EntradaVeiculo } from '@/services/entradaVeiculo'
 import Header from '@/components/layout/Header'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -16,7 +17,7 @@ import { CartaoSetor } from './PainelContratos'
 import { Badge } from '@/components/ui/badge'
 import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
 import FiltrosPainel, { STATUS_ATIVIDADE, type FiltrosPainelState } from '@/components/ui/FiltrosPainel'
-import { Check, CheckCircle2, PlusCircle, X } from 'lucide-react'
+import { Check, CheckCircle2, PlusCircle, X, AlertTriangle, ArrowDownLeft } from 'lucide-react'
 import type { MetodoPagamentoItem, PendenciaFinanceira } from '@/types'
 import type { VendaListagem } from '@/services/vendas'
 import SecaoTarefasSetor from '@/components/tarefas/SecaoTarefasSetor'
@@ -44,6 +45,96 @@ function getMetodos(a: AtividadeComVenda): MetodoPagamentoItem[] {
   return (a.sales as VendaListagem).formas_pagamento_json ?? []
 }
 
+// ── Item financeiro unificado ─────────────────────────────────
+interface ItemFinanceiro {
+  chave: string
+  tipo: 'pagamento' | 'entrada' | 'troco'
+  label: string
+  valor: number        // positivo = recebimento, negativo = saída (troco)
+  detalhe?: string
+}
+
+function buildItens(a: AtividadeComVenda, entradas: EntradaVeiculo[]): ItemFinanceiro[] {
+  const venda = a.sales as VendaListagem
+  const itens: ItemFinanceiro[] = []
+
+  // ── Métodos de pagamento ──
+  getMetodos(a).forEach((m, i) => {
+    const partes: string[] = []
+    if (m.banco) partes.push(m.banco)
+    if (m.numero_parcelas) {
+      partes.push(
+        `${m.numero_parcelas}×${m.valor_parcela ? ` de ${formatarMoeda(m.valor_parcela)}` : ''}${
+          m.data_primeiro_pagamento ? ` · 1ª em ${formatarData(m.data_primeiro_pagamento)}` : ''
+        }`
+      )
+    }
+    if (m.data && !m.numero_parcelas) partes.push(`Previsto: ${formatarData(m.data)}`)
+
+    itens.push({
+      chave: `p_${i}`,
+      tipo: 'pagamento',
+      label: LABEL_METODO[m.tipo] ?? m.tipo,
+      valor: m.valor,
+      detalhe: partes.join(' · ') || undefined,
+    })
+  })
+
+  // ── Veículos de entrada ──
+  entradas.forEach((e, i) => {
+    const debitos = e.debitos ?? []
+    const totalDebitos = debitos.reduce((s, d) => s + d.valor, 0)
+    const valorLiquido = (e.valor_estimado ?? 0) - totalDebitos
+
+    const partes: string[] = []
+    if (e.marca || e.modelo) partes.push(`${e.marca ?? ''} ${e.modelo ?? ''}`.trim())
+    if (e.placa) partes.push(e.placa.toUpperCase())
+    if (totalDebitos > 0) partes.push(`Débitos: -${formatarMoeda(totalDebitos)}`)
+
+    itens.push({
+      chave: `e_${i}`,
+      tipo: 'entrada',
+      label: entradas.length > 1 ? `Veículo de Entrada ${i + 1}` : 'Veículo de Entrada',
+      valor: valorLiquido,
+      detalhe: partes.join(' · ') || undefined,
+    })
+  })
+
+  // ── Troco ──
+  const troco = (venda as unknown as { troco?: number }).troco ?? 0
+  if (troco > 0) {
+    itens.push({
+      chave: 'troco',
+      tipo: 'troco',
+      label: 'Troco ao cliente',
+      valor: -troco,
+    })
+  }
+
+  return itens
+}
+
+// Lê confirmações salvas (suporta formato antigo boolean[] e novo Record<string,boolean>)
+function lerConfirmacoes(
+  dadosJson: Record<string, unknown> | null | undefined,
+  itens: ItemFinanceiro[],
+  metodos: MetodoPagamentoItem[]
+): Record<string, boolean> {
+  const mapa: Record<string, boolean> = {}
+  itens.forEach((item) => { mapa[item.chave] = false })
+
+  const salvas = dadosJson?.confirmacoes
+  if (Array.isArray(salvas)) {
+    // formato antigo — só os métodos de pagamento
+    metodos.forEach((_, i) => { if (salvas[i] != null) mapa[`p_${i}`] = salvas[i] as boolean })
+  } else if (salvas && typeof salvas === 'object') {
+    const rec = salvas as Record<string, boolean>
+    itens.forEach((item) => { if (rec[item.chave] != null) mapa[item.chave] = rec[item.chave] })
+  }
+
+  return mapa
+}
+
 export default function PainelFinanceiro() {
   useRequererPerfil(['financeiro', 'supervisor'])
 
@@ -55,36 +146,47 @@ export default function PainelFinanceiro() {
   const [carregando, setCarregando] = useState(true)
   const [processando, setProcessando] = useState<string | null>(null)
   const [pendenciasPorVenda, setPendenciasPorVenda] = useState<Record<string, PendenciaFinanceira[]>>({})
+  const [entradasPorVenda, setEntradasPorVenda] = useState<Record<string, EntradaVeiculo[]>>({})
   const [descricaoPendencia, setDescricaoPendencia] = useState<Record<string, string>>({})
   const [adicionandoPendencia, setAdicionandoPendencia] = useState<string | null>(null)
   const [vendaSelecionada, setVendaSelecionada] = useState<VendaListagem | null>(null)
-  const [confirmacoesPorAtividade, setConfirmacoesPorAtividade] = useState<Record<string, boolean[]>>({})
-
-  // Inicializa estado de confirmações a partir do dados_json salvo no banco
-  useEffect(() => {
-    const mapa: Record<string, boolean[]> = {}
-    atividades.forEach((a) => {
-      const metodos = getMetodos(a)
-      if (metodos.length > 0) {
-        const salvas = a.dados_json?.confirmacoes as boolean[] | undefined
-        mapa[a.id] = salvas?.length === metodos.length ? salvas : Array(metodos.length).fill(false)
-      }
-    })
-    setConfirmacoesPorAtividade(mapa)
-  }, [atividades])
+  const [confirmacoesPorAtividade, setConfirmacoesPorAtividade] = useState<Record<string, Record<string, boolean>>>({})
 
   async function carregar() {
     setCarregando(true)
     try {
       const dados = await listarAtividadesDoSetor('financeiro', filtros)
       setAtividades(dados)
-      const mapa: Record<string, PendenciaFinanceira[]> = {}
+
+      const mapaPendencias: Record<string, PendenciaFinanceira[]> = {}
+      const mapaEntradas: Record<string, EntradaVeiculo[]> = {}
+
       await Promise.all(
         dados.map(async (a) => {
-          mapa[a.sale_id] = await listarPendenciasFinanceiras(a.sale_id)
+          const [pends, entradas] = await Promise.all([
+            listarPendenciasFinanceiras(a.sale_id),
+            buscarEntradasVeiculo(a.sale_id),
+          ])
+          mapaPendencias[a.sale_id] = pends
+          mapaEntradas[a.sale_id] = entradas
         })
       )
-      setPendenciasPorVenda(mapa)
+
+      setPendenciasPorVenda(mapaPendencias)
+      setEntradasPorVenda(mapaEntradas)
+
+      // Inicializa mapa de confirmações com suporte ao formato antigo
+      const mapaConf: Record<string, Record<string, boolean>> = {}
+      dados.forEach((a) => {
+        const itens = buildItens(a, mapaEntradas[a.sale_id] ?? [])
+        mapaConf[a.id] = lerConfirmacoes(
+          a.dados_json as Record<string, unknown> | null,
+          itens,
+          getMetodos(a)
+        )
+      })
+      setConfirmacoesPorAtividade(mapaConf)
+
     } finally {
       setCarregando(false)
     }
@@ -92,31 +194,28 @@ export default function PainelFinanceiro() {
 
   useEffect(() => { carregar() }, [filtros])
 
-  async function toggleConfirmacao(atividadeId: string, index: number) {
-    const atual = confirmacoesPorAtividade[atividadeId] ?? []
-    const novas = [...atual]
-    novas[index] = !novas[index]
-    // Atualiza estado local imediatamente para feedback visual instantâneo
+  async function toggleConfirmacao(atividadeId: string, chave: string) {
+    const atual = confirmacoesPorAtividade[atividadeId] ?? {}
+    const novas = { ...atual, [chave]: !atual[chave] }
     setConfirmacoesPorAtividade((prev) => ({ ...prev, [atividadeId]: novas }))
     try {
       await atualizarConfirmacoesFinanceiro(atividadeId, novas)
     } catch {
-      // Reverte se falhar
       setConfirmacoesPorAtividade((prev) => ({ ...prev, [atividadeId]: atual }))
     }
   }
 
-  function podeConcluir(atividadeId: string, metodos: MetodoPagamentoItem[]): boolean {
-    if (metodos.length === 0) return true
-    const confs = confirmacoesPorAtividade[atividadeId] ?? []
-    return confs.length === metodos.length && confs.every(Boolean)
+  function podeConcluir(atividadeId: string, itens: ItemFinanceiro[]): boolean {
+    if (itens.length === 0) return true
+    const confs = confirmacoesPorAtividade[atividadeId] ?? {}
+    return itens.every((item) => confs[item.chave] === true)
   }
 
   async function concluirFinanceiro(atividade: AtividadeComVenda) {
     setProcessando(atividade.id)
     try {
       await concluirAtividade(atividade.id, {
-        confirmacoes: confirmacoesPorAtividade[atividade.id] ?? [],
+        confirmacoes: confirmacoesPorAtividade[atividade.id] ?? {},
       })
       await carregar()
     } finally {
@@ -183,12 +282,16 @@ export default function PainelFinanceiro() {
                 </p>
                 <div className="space-y-3">
                   {pendentes.map((a) => {
-                    const pendencias       = pendenciasPorVenda[a.sale_id] ?? []
+                    const pendencias        = pendenciasPorVenda[a.sale_id] ?? []
                     const pendenciasAbertas = pendencias.filter((p) => p.status === 'aberta')
-                    const metodos          = getMetodos(a)
-                    const confirmacoes     = confirmacoesPorAtividade[a.id] ?? []
-                    const totalConf        = confirmacoes.filter(Boolean).length
-                    const todoConf         = podeConcluir(a.id, metodos)
+                    const entradas          = entradasPorVenda[a.sale_id] ?? []
+                    const itens             = buildItens(a, entradas)
+                    const confirmacoes      = confirmacoesPorAtividade[a.id] ?? {}
+                    const totalConf         = itens.filter((i) => confirmacoes[i.chave]).length
+                    const todoConf          = podeConcluir(a.id, itens)
+                    const venda             = a.sales as VendaListagem
+                    const totalItens        = itens.reduce((s, i) => s + i.valor, 0)
+                    const confere           = Math.abs(totalItens - venda.valor_venda) < 0.01
 
                     return (
                       <CartaoSetor
@@ -201,30 +304,32 @@ export default function PainelFinanceiro() {
                         extra={
                           <div className="mt-3 pt-3 border-t border-gray-100 space-y-3">
 
-                            {/* ── Confirmação por método de pagamento ── */}
-                            {metodos.length > 0 && (
+                            {/* ── Itens da negociação ── */}
+                            {itens.length > 0 && (
                               <div>
                                 <div className="flex items-center justify-between mb-2">
                                   <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">
-                                    Confirmar recebimentos
+                                    Conferir negociação
                                   </p>
                                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${
                                     todoConf
                                       ? 'bg-green-100 text-green-700'
                                       : 'bg-amber-100 text-amber-700'
                                   }`}>
-                                    {totalConf}/{metodos.length} confirmado{totalConf !== 1 ? 's' : ''}
+                                    {totalConf}/{itens.length} confirmado{totalConf !== 1 ? 's' : ''}
                                   </span>
                                 </div>
 
                                 <div className="space-y-1.5">
-                                  {metodos.map((m, i) => {
-                                    const confirmado = confirmacoes[i] ?? false
+                                  {itens.map((item) => {
+                                    const confirmado = confirmacoes[item.chave] ?? false
+                                    const isNegativo = item.valor < 0
+
                                     return (
                                       <button
-                                        key={i}
+                                        key={item.chave}
                                         type="button"
-                                        onClick={() => toggleConfirmacao(a.id, i)}
+                                        onClick={() => toggleConfirmacao(a.id, item.chave)}
                                         className={`w-full flex items-start gap-3 p-2.5 rounded-lg border text-left transition-all ${
                                           confirmado
                                             ? 'bg-green-50 border-green-200'
@@ -240,42 +345,75 @@ export default function PainelFinanceiro() {
                                           {confirmado && <Check size={11} className="text-white" />}
                                         </div>
 
-                                        {/* Detalhes do método */}
+                                        {/* Ícone do tipo */}
+                                        {item.tipo === 'entrada' && (
+                                          <ArrowDownLeft size={14} className={`mt-0.5 flex-shrink-0 ${confirmado ? 'text-green-600' : 'text-indigo-400'}`} />
+                                        )}
+
+                                        {/* Detalhes */}
                                         <div className="flex-1 min-w-0">
                                           <div className="flex items-center justify-between gap-2">
-                                            <span className={`text-sm font-medium ${confirmado ? 'text-green-700' : 'text-gray-800'}`}>
-                                              {LABEL_METODO[m.tipo] ?? m.tipo}
-                                            </span>
-                                            <span className={`text-sm font-semibold tabular-nums ${confirmado ? 'text-green-700' : 'text-gray-700'}`}>
-                                              {formatarMoeda(m.valor)}
+                                            <div className="flex items-center gap-1.5 min-w-0">
+                                              <span className={`text-sm font-medium ${confirmado ? 'text-green-700' : 'text-gray-800'}`}>
+                                                {item.label}
+                                              </span>
+                                              {item.tipo === 'entrada' && (
+                                                <span className="text-xs text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded-full border border-indigo-100">
+                                                  Entrada
+                                                </span>
+                                              )}
+                                              {item.tipo === 'troco' && (
+                                                <span className="text-xs text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full border border-orange-100">
+                                                  Troco
+                                                </span>
+                                              )}
+                                            </div>
+                                            <span className={`text-sm font-semibold tabular-nums flex-shrink-0 ${
+                                              confirmado
+                                                ? 'text-green-700'
+                                                : isNegativo
+                                                  ? 'text-orange-600'
+                                                  : 'text-gray-700'
+                                            }`}>
+                                              {isNegativo ? '-' : '+'}{formatarMoeda(Math.abs(item.valor))}
                                             </span>
                                           </div>
-                                          {/* Banco / financeira */}
-                                          {m.banco && (
-                                            <p className="text-xs text-gray-500 mt-0.5">{m.banco}</p>
-                                          )}
-                                          {/* Parcelas */}
-                                          {m.numero_parcelas && (
-                                            <p className="text-xs text-gray-500 mt-0.5">
-                                              {m.numero_parcelas}x
-                                              {m.valor_parcela
-                                                ? ` de ${formatarMoeda(m.valor_parcela)}`
-                                                : ''}
-                                              {m.data_primeiro_pagamento
-                                                ? ` · 1ª em ${formatarData(m.data_primeiro_pagamento)}`
-                                                : ''}
-                                            </p>
-                                          )}
-                                          {/* Data prevista do pagamento (quando informada) */}
-                                          {m.data && !m.numero_parcelas && (
-                                            <p className="text-xs text-gray-500 mt-0.5">
-                                              Previsto: {formatarData(m.data)}
-                                            </p>
+                                          {item.detalhe && (
+                                            <p className="text-xs text-gray-500 mt-0.5 truncate">{item.detalhe}</p>
                                           )}
                                         </div>
                                       </button>
                                     )
                                   })}
+                                </div>
+
+                                {/* ── Resumo totalizador ── */}
+                                <div className={`mt-2 rounded-lg px-3 py-2 flex items-center justify-between gap-2 ${
+                                  confere ? 'bg-green-50 border border-green-200' : 'bg-amber-50 border border-amber-200'
+                                }`}>
+                                  <div className="text-xs text-gray-600 space-y-0.5">
+                                    <p>
+                                      <span className="font-medium">Total conferido:</span>
+                                      {' '}{formatarMoeda(totalItens)}
+                                    </p>
+                                    <p>
+                                      <span className="font-medium">Valor da venda:</span>
+                                      {' '}{formatarMoeda(venda.valor_venda)}
+                                    </p>
+                                  </div>
+                                  {confere ? (
+                                    <div className="flex items-center gap-1 text-green-700">
+                                      <CheckCircle2 size={15} />
+                                      <span className="text-xs font-semibold">Confere</span>
+                                    </div>
+                                  ) : (
+                                    <div className="flex items-center gap-1 text-amber-700">
+                                      <AlertTriangle size={14} />
+                                      <span className="text-xs font-semibold">
+                                        Dif. {formatarMoeda(Math.abs(totalItens - venda.valor_venda))}
+                                      </span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             )}
@@ -345,14 +483,14 @@ export default function PainelFinanceiro() {
                           <Button
                             size="sm"
                             onClick={() => concluirFinanceiro(a)}
-                            disabled={processando === a.id || (!todoConf && metodos.length > 0)}
+                            disabled={processando === a.id || (!todoConf && itens.length > 0)}
                           >
                             <CheckCircle2 size={13} className="mr-1.5" />
                             {processando === a.id ? 'Processando...' : 'Concluir Financeiro'}
                           </Button>
-                          {!todoConf && metodos.length > 0 && (
-                            <p className="text-xs text-amber-600">
-                              Confirme todos os recebimentos acima
+                          {!todoConf && itens.length > 0 && (
+                            <p className="text-xs text-amber-600 text-right">
+                              Confirme todos os itens acima
                             </p>
                           )}
                         </div>
