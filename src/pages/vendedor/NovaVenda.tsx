@@ -116,7 +116,10 @@ const schema = z.object({
   data_prevista_entrega: z.string().optional(),
   canal_venda: z.string().min(1, 'Canal de Venda é obrigatório'),
   comprador_nome: z.string().min(1, 'Obrigatório'),
-  comprador_cpf_cnpj: z.string().min(11, 'CPF/CNPJ inválido'),
+  comprador_cpf_cnpj: z.string().refine(
+    (v) => { const d = v.replace(/\D/g, ''); return d.length === 11 || d.length === 14 },
+    'Digite um CPF (11 dígitos) ou CNPJ (14 dígitos) válido'
+  ),
   comprador_rg: z.string().optional(),
   comprador_nascimento: z.string().optional(),
   comprador_profissao: z.string().optional(),
@@ -189,6 +192,21 @@ function formatarMoeda(v: number) {
 type MetodoPag = {
   tipo: string; valor: number; data?: string; banco?: string
   numero_parcelas?: number; valor_parcela?: number; data_primeiro_pagamento?: string
+}
+
+function formatarCpfCnpj(valor: string): string {
+  const d = valor.replace(/\D/g, '').slice(0, 14)
+  if (d.length <= 11) {
+    return d
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d)/, '$1.$2')
+      .replace(/(\d{3})(\d{1,2})$/, '$1-$2')
+  }
+  return d
+    .replace(/(\d{2})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1.$2')
+    .replace(/(\d{3})(\d)/, '$1/$2')
+    .replace(/(\d{4})(\d{1,2})$/, '$1-$2')
 }
 
 function jsonParaLinhas(formas: MetodoPag[]): LinhaPagamento[] {
@@ -1119,7 +1137,14 @@ export default function NovaVenda() {
             <Input {...register('comprador_nome')} placeholder="Nome do comprador" />
           </Campo>
           <Campo label="CPF / CNPJ *" erro={errors.comprador_cpf_cnpj?.message}>
-            <Input {...register('comprador_cpf_cnpj')} placeholder="000.000.000-00" />
+            <Input
+              {...register('comprador_cpf_cnpj')}
+              placeholder="000.000.000-00"
+              onChange={(e) => {
+                const formatted = formatarCpfCnpj(e.target.value)
+                setValue('comprador_cpf_cnpj', formatted, { shouldValidate: !!errors.comprador_cpf_cnpj })
+              }}
+            />
           </Campo>
           <Campo label="RG" erro={errors.comprador_rg?.message}>
             <Input {...register('comprador_rg')} placeholder="0000000" />
@@ -1532,7 +1557,7 @@ export default function NovaVenda() {
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-1 block">CPF do Proprietário</Label>
                         <Input placeholder="000.000.000-00" value={entrada.dados.proprietario_cpf ?? ''}
-                          onChange={(e) => atualizarDadosEntrada(idx, { proprietario_cpf: e.target.value })} />
+                          onChange={(e) => atualizarDadosEntrada(idx, { proprietario_cpf: formatarCpfCnpj(e.target.value) })} />
                       </div>
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-1 block">Renavam</Label>
