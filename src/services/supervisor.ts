@@ -17,6 +17,7 @@ export interface ResumoSupervisor {
   pendenciasVendedor: number
   pendenciasVencidas: number
   aguardandoAprovacao: number
+  pendenciasTransferencia: number
   setores: {
     contratos: ResumoSetor
     financeiro: ResumoSetor
@@ -88,6 +89,7 @@ export async function buscarResumo(de: string, ate: string): Promise<ResumoSuper
     { count: totalVendas },
     { data: pendencias },
     { data: atividades },
+    { count: pendenciasTransferencia },
   ] = await Promise.all([
     supabase.from('sales')
       .select('*', { count: 'exact', head: true })
@@ -98,6 +100,10 @@ export async function buscarResumo(de: string, ate: string): Promise<ResumoSuper
       .in('status', ['aberta', 'aguardando_aprovacao']),
     supabase.from('sector_activities')
       .select('setor, status'),
+    supabase.from('pendencies')
+      .select('*', { count: 'exact', head: true })
+      .eq('setor', 'transferencia')
+      .eq('status', 'aberta'),
   ])
 
   const agora = new Date()
@@ -115,6 +121,7 @@ export async function buscarResumo(de: string, ate: string): Promise<ResumoSuper
     pendenciasVendedor: abertas.filter((p) => p.status === 'aberta').length,
     pendenciasVencidas: abertas.filter((p) => p.status === 'aberta' && new Date(p.prazo) < agora).length,
     aguardandoAprovacao: abertas.filter((p) => p.status === 'aguardando_aprovacao').length,
+    pendenciasTransferencia: pendenciasTransferencia ?? 0,
     setores: {
       contratos: contarSetor('contratos'),
       financeiro: contarSetor('financeiro'),

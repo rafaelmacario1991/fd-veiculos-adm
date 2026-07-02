@@ -29,6 +29,7 @@ type SetorChave = typeof SETORES[number]['chave']
 
 const RESUMO_ZERO: ResumoSupervisor = {
   totalVendas: 0, vendasHoje: 0, pendenciasVendedor: 0, pendenciasVencidas: 0, aguardandoAprovacao: 0,
+  pendenciasTransferencia: 0,
   setores: {
     contratos: { pendentes: 0, concluidas: 0 },
     financeiro: { pendentes: 0, concluidas: 0 },
@@ -197,6 +198,14 @@ export default function PainelSupervisor() {
                           {dados.pendentes} pend.
                         </p>
                       </div>
+                      {chave === 'transferencia' && resumo.pendenciasTransferencia > 0 && (
+                        <div className="mt-2 flex items-center gap-1.5 bg-amber-50 border border-amber-200 rounded-lg px-2 py-1">
+                          <AlertTriangle size={11} className="text-amber-500 flex-shrink-0" />
+                          <p className="text-xs text-amber-700 font-medium">
+                            {resumo.pendenciasTransferencia} pend. antes do despachante
+                          </p>
+                        </div>
+                      )}
                       <div className="mt-3 h-1.5 bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full bg-${cor}-500 rounded-full transition-all`} style={{ width: `${pct}%` }} />
                       </div>

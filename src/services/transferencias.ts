@@ -57,6 +57,51 @@ export async function criarTransferencia(
   if (error) throw error
 }
 
+// ── Pendências de transferência (antes do envio ao despachante) ──────
+
+export interface PendenciaTransferencia {
+  id: string
+  sale_id: string
+  descricao: string
+  status: string
+  registrado_por: string
+  criado_em: string
+}
+
+export async function registrarPendenciaTransferencia(
+  saleId: string,
+  descricao: string,
+  userId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('pendencies')
+    .insert({ sale_id: saleId, setor: 'transferencia', descricao, registrado_por: userId })
+  if (error) throw error
+}
+
+export async function listarPendenciasTransferencia(saleIds: string[]): Promise<PendenciaTransferencia[]> {
+  if (saleIds.length === 0) return []
+  const { data, error } = await supabase
+    .from('pendencies')
+    .select('id, sale_id, descricao, status, registrado_por, criado_em')
+    .eq('setor', 'transferencia')
+    .eq('status', 'aberta')
+    .in('sale_id', saleIds)
+  if (error) throw error
+  return (data ?? []) as PendenciaTransferencia[]
+}
+
+export async function encerrarPendenciaTransferencia(
+  pendenciaId: string,
+  userId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('pendencies')
+    .update({ status: 'encerrada', encerrado_por: userId, encerrado_em: new Date().toISOString() })
+    .eq('id', pendenciaId)
+  if (error) throw error
+}
+
 export async function atualizarStatusTransferencia(
   processoId: string,
   status: StatusTransferencia,

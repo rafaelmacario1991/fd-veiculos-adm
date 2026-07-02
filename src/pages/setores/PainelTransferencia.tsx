@@ -7,7 +7,11 @@ import {
   criarTransferencia,
   listarTransferencias,
   atualizarStatusTransferencia,
+  registrarPendenciaTransferencia,
+  listarPendenciasTransferencia,
+  encerrarPendenciaTransferencia,
   type ProcessoComDespachante,
+  type PendenciaTransferencia,
 } from '@/services/transferencias'
 import { excluirAtividadeSetor, excluirTransferencia } from '@/services/supervisor'
 import Header from '@/components/layout/Header'
@@ -21,7 +25,7 @@ import { useNavigate } from 'react-router-dom'
 import { CartaoSetor } from './PainelContratos'
 import ModalResumoVenda from '@/components/vendas/ModalResumoVenda'
 import FiltrosPainel, { STATUS_TRANSFERENCIA, type FiltrosPainelState } from '@/components/ui/FiltrosPainel'
-import { Truck, CheckCircle2, AlertTriangle, Clock, History, Trash2 } from 'lucide-react'
+import { Truck, CheckCircle2, AlertTriangle, Clock, History, Trash2, XCircle } from 'lucide-react'
 import type { Despachante } from '@/types'
 import type { VendaListagem } from '@/services/vendas'
 import SecaoTarefasSetor from '@/components/tarefas/SecaoTarefasSetor'
@@ -41,6 +45,12 @@ export default function PainelTransferencia() {
   const [atividadeEnviando, setAtividadeEnviando] = useState<AtividadeComVenda | null>(null)
   const [despachanteId, setDespachanteId] = useState('')
   const [enviando, setEnviando] = useState(false)
+
+  // Pendências de transferência (antes do envio ao despachante)
+  const [pendenciasMap, setPendenciasMap] = useState<Map<string, PendenciaTransferencia[]>>(new Map())
+  const [atividadeComPendencia, setAtividadeComPendencia] = useState<AtividadeComVenda | null>(null)
+  const [descNovaPendencia, setDescNovaPendencia] = useState('')
+  const [salvandoPendencia, setSalvandoPendencia] = useState(false)
 
   const navigate = useNavigate()
   const [filtros, setFiltros] = useState<FiltrosPainelState>({ de: '', ate: '', status: '' })
@@ -64,6 +74,16 @@ export default function PainelTransferencia() {
       setPendentes(pend)
       setProcessos(proc)
       setDespachantes(desp)
+
+      const saleIds = pend.map((a) => a.sale_id)
+      const pendenciasLista = await listarPendenciasTransferencia(saleIds)
+      const mapa = new Map<string, PendenciaTransferencia[]>()
+      for (const p of pendenciasLista) {
+        const lista = mapa.get(p.sale_id) ?? []
+        lista.push(p)
+        mapa.set(p.sale_id, lista)
+      }
+      setPendenciasMap(mapa)
     } finally {
       setCarregando(false)
     }
@@ -125,6 +145,27 @@ export default function PainelTransferencia() {
     }
   }
 
+  async function salvarPendenciaAtividade() {
+    if (!atividadeComPendencia || !descNovaPendencia.trim() || !usuario?.id) return
+    setSalvandoPendencia(true)
+    try {
+      await registrarPendenciaTransferencia(atividadeComPendencia.sale_id, descNovaPendencia.trim(), usuario.id)
+      setAtividadeComPendencia(null)
+      setDescNovaPendencia('')
+      await carregar()
+    } finally {
+      setSalvandoPendencia(false)
+    }
+  }
+
+  async function encerrarPendencia(pendenciaId: string) {
+    if (!usuario?.id) return
+    try {
+      await encerrarPendenciaTransferencia(pendenciaId, usuario.id)
+      await carregar()
+    } catch { /* silent */ }
+  }
+
   // Filtra vendas que já têm processo criado (aguarda apenas as sem processo)
   const saleIdsComProcesso = new Set(processos.map((p) => p.sale_id))
   const aguardandoEnvio = pendentes.filter((a) => !saleIdsComProcesso.has(a.sale_id))
@@ -154,18 +195,48 @@ export default function PainelTransferencia() {
                   Aguardando Envio ao Despachante ({aguardandoEnvio.length})
                 </p>
                 <div className="space-y-3">
-                  {aguardandoEnvio.map((a) => (
-                    <CartaoSetor key={a.id} atividade={a}
-                      onVerResumo={() => setVendaSelecionada(a.sales)}
-                      onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
-                      onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
-                      onExcluir={isSupervisor ? () => handleExcluirAtividade(a.id) : undefined}>
-                      <Button size="sm" onClick={() => setAtividadeEnviando(a)}>
-                        <Truck size={13} className="mr-1.5" />
-                        Enviar ao Despachante
-                      </Button>
-                    </CartaoSetor>
-                  ))}
+                  {aguardandoEnvio.map((a) => {
+                    const pendenciasCard = pendenciasMap.get(a.sale_id) ?? []
+                    return (
+                      <CartaoSetor key={a.id} atividade={a}
+                        onVerResumo={() => setVendaSelecionada(a.sales)}
+                        onVerHistorico={() => navigate(`/venda/${a.sale_id}`)}
+                        onGerarContrato={() => navigate(`/venda/${a.sale_id}?contrato=1`)}
+                        onExcluir={isSupervisor ? () => handleExcluirAtividade(a.id) : undefined}>
+                        {/* Pendências registradas */}
+                        {pendenciasCard.length > 0 && (
+                          <div className="mt-2 space-y-1 w-full">
+                            {pendenciasCard.map((p) => (
+                              <div key={p.id} className="flex items-start justify-between gap-2 bg-amber-50 border border-amber-200 rounded-lg px-2.5 py-1.5">
+                                <div className="flex items-start gap-1.5 min-w-0">
+                                  <AlertTriangle size={12} className="text-amber-500 mt-0.5 flex-shrink-0" />
+                                  <p className="text-xs text-amber-800 break-words">{p.descricao}</p>
+                                </div>
+                                <button
+                                  onClick={() => encerrarPendencia(p.id)}
+                                  title="Encerrar pendência"
+                                  className="text-amber-400 hover:text-red-500 transition-colors flex-shrink-0"
+                                >
+                                  <XCircle size={13} />
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        <div className="flex gap-2 mt-1">
+                          <Button size="sm" variant="outline" className="h-7 px-2 text-xs border-amber-300 text-amber-700 hover:bg-amber-50"
+                            onClick={() => { setAtividadeComPendencia(a); setDescNovaPendencia('') }}>
+                            <AlertTriangle size={11} className="mr-1" />
+                            Pendência
+                          </Button>
+                          <Button size="sm" onClick={() => setAtividadeEnviando(a)}>
+                            <Truck size={13} className="mr-1.5" />
+                            Enviar ao Despachante
+                          </Button>
+                        </div>
+                      </CartaoSetor>
+                    )
+                  })}
                 </div>
               </div>
             )}
@@ -356,6 +427,45 @@ export default function PainelTransferencia() {
                 {enviando ? 'Enviando...' : 'Confirmar Envio'}
               </Button>
               <Button variant="outline" onClick={() => setAtividadeEnviando(null)}>Cancelar</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Dialog — registrar pendência de atividade (antes do despachante) */}
+      <Dialog open={!!atividadeComPendencia} onOpenChange={(open) => !open && setAtividadeComPendencia(null)}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle size={16} className="text-amber-500" />
+              Registrar Pendência
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 pt-2">
+            {atividadeComPendencia && (
+              <p className="text-sm text-gray-500">
+                {atividadeComPendencia.sales.marca} {atividadeComPendencia.sales.modelo} — {atividadeComPendencia.sales.placa}
+              </p>
+            )}
+            <div>
+              <Label className="text-xs font-medium">Descrição da pendência *</Label>
+              <textarea
+                className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring resize-none"
+                rows={3}
+                placeholder="Descreva o motivo da pendência..."
+                value={descNovaPendencia}
+                onChange={(e) => setDescNovaPendencia(e.target.value)}
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                onClick={salvarPendenciaAtividade}
+                disabled={!descNovaPendencia.trim() || salvandoPendencia}
+                className="flex-1 bg-amber-500 hover:bg-amber-600"
+              >
+                {salvandoPendencia ? 'Salvando...' : 'Registrar Pendência'}
+              </Button>
+              <Button variant="outline" onClick={() => setAtividadeComPendencia(null)}>Cancelar</Button>
             </div>
           </div>
         </DialogContent>
