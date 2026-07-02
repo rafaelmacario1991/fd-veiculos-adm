@@ -150,6 +150,18 @@ export async function salvarDocumentosNoBanco(docs: DocumentoEntrada[]): Promise
   if (error) throw error
 }
 
+// Retorna documentos CNH/RG do comprador (cnh_rg_comprador)
+export async function listarDocumentosComprador(saleId: string): Promise<DocumentoEntrada[]> {
+  const { data, error } = await supabase
+    .from('sale_attachments')
+    .select('*')
+    .eq('sale_id', saleId)
+    .eq('tipo', 'cnh_rg_comprador')
+    .order('criado_em')
+  if (error) throw error
+  return (data ?? []) as DocumentoEntrada[]
+}
+
 export async function deletarDocumentoTemp(doc: DocumentoEntrada): Promise<void> {
   await supabase.storage.from('documentos-entrada').remove([doc.storage_path])
 }

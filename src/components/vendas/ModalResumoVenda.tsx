@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import type { VendaListagem } from '@/services/vendas'
 import { listarAnexos, type AnexoVenda } from '@/services/anexos'
-import { buscarEntradasVeiculo, listarDocumentosEntrada, type EntradaVeiculo, type DocumentoEntrada } from '@/services/entradaVeiculo'
+import { buscarEntradasVeiculo, listarDocumentosEntrada, listarDocumentosComprador, type EntradaVeiculo, type DocumentoEntrada } from '@/services/entradaVeiculo'
 import { Car, User, DollarSign, FileText, Camera, ArrowLeftRight, FileCheck, BadgeInfo } from 'lucide-react'
 
 interface Props {
@@ -54,12 +54,14 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
   const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null)
   const [entradas, setEntradas] = useState<EntradaVeiculo[]>([])
   const [docsEntrada, setDocsEntrada] = useState<DocumentoEntrada[]>([])
+  const [docsComprador, setDocsComprador] = useState<DocumentoEntrada[]>([])
 
   useEffect(() => {
-    if (!venda) { setFotos([]); setEntradas([]); setDocsEntrada([]); return }
+    if (!venda) { setFotos([]); setEntradas([]); setDocsEntrada([]); setDocsComprador([]); return }
     listarAnexos(venda.id).then(setFotos).catch(() => setFotos([]))
     buscarEntradasVeiculo(venda.id).then(setEntradas).catch(() => setEntradas([]))
     listarDocumentosEntrada(venda.id).then(setDocsEntrada).catch(() => setDocsEntrada([]))
+    listarDocumentosComprador(venda.id).then(setDocsComprador).catch(() => setDocsComprador([]))
   }, [venda?.id])
 
   if (!venda) return null
@@ -154,6 +156,13 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
               label="Prev. de Entrega"
               valor={venda.data_prevista_entrega ? formatarData(venda.data_prevista_entrega) : null}
             />
+            {(venda as unknown as { troco: number | null }).troco != null &&
+              (venda as unknown as { troco: number | null }).troco! > 0 && (
+              <Linha
+                label="Troco ao Cliente"
+                valor={moeda((venda as unknown as { troco: number | null }).troco)}
+              />
+            )}
 
             {/* Formas de pagamento (novo formato JSON) */}
             {venda.formas_pagamento_json && venda.formas_pagamento_json.length > 0 ? (
@@ -202,6 +211,30 @@ export default function ModalResumoVenda({ venda, onFechar }: Props) {
               </>
             )}
           </Secao>
+
+          {/* Documentos do Comprador */}
+          {docsComprador.length > 0 && (
+            <>
+              <hr className="border-gray-100" />
+              <Secao icone={<FileCheck size={13} />} titulo="Documentos do Comprador">
+                <div className="col-span-2 space-y-1.5">
+                  {docsComprador.map((doc) => (
+                    <a
+                      key={doc.id}
+                      href={doc.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-center gap-2 text-xs text-blue-700 hover:underline"
+                    >
+                      <FileCheck size={13} className="text-green-600 flex-shrink-0" />
+                      <span className="font-medium">CNH / RG:</span>
+                      {doc.nome_arquivo}
+                    </a>
+                  ))}
+                </div>
+              </Secao>
+            </>
+          )}
 
           {/* Transferência e IPVA */}
           {(venda.transferencia_info || venda.ipva_info) && (

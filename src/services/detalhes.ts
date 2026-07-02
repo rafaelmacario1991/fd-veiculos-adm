@@ -42,6 +42,7 @@ export interface DetalheVenda {
   numero_parcelas: number | null
   transferencia_info: string | null
   ipva_info: string | null
+  troco: number | null
   observacoes: string | null
   data_venda: string | null
   data_prevista_entrega: string | null

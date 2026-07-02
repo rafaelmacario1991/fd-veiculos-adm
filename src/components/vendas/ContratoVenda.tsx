@@ -66,6 +66,8 @@ export default function ContratoVenda({ venda, editavel = false }: Props) {
   const financiamento = formas.find((f) => f.tipo === 'financiamento')
   const pagamentosNaoFinanciamento = formas.filter((f) => f.tipo !== 'financiamento')
 
+  const troco = venda.troco ?? 0
+
   const transferenciaInfo = venda.transferencia_info ?? ''
   const isCortesia = transferenciaInfo.toLowerCase() === 'cortesia'
   const transfTipo = isCortesia
@@ -175,6 +177,17 @@ export default function ContratoVenda({ venda, editavel = false }: Props) {
               <div>• Financiamento — R$ {moeda(financiamento.valor)}</div>
             )}
           </>
+        )}
+        {troco > 0 && (
+          <div style={{ marginTop: '4px', color: '#6B21A8' }}>
+            {editavel ? (
+              <span contentEditable suppressContentEditableWarning className="campo-editavel">
+                Troco ao comprador: R$ {moeda(troco)}
+              </span>
+            ) : (
+              <span>Troco ao comprador: R$ {moeda(troco)}</span>
+            )}
+          </div>
         )}
       </Secao>
 

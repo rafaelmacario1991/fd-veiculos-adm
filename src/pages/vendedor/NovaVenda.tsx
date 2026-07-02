@@ -28,6 +28,7 @@ import {
   salvarEntradasVeiculo,
   buscarEntradasVeiculo,
   listarDocumentosEntrada,
+  listarDocumentosComprador,
   salvarDocumentosNoBanco,
   type DadosEntradaVeiculo,
   type DocumentoEntrada,
@@ -475,6 +476,12 @@ export default function NovaVenda() {
   const [valorTransferencia, setValorTransferencia] = useState('')
   const [ipvaInfo, setIpvaInfo] = useState('')
 
+  // Troco ao cliente
+  const [troco, setTroco] = useState<number>(0)
+
+  // Documentos do comprador (CNH/RG)
+  const [documentosComprador, setDocumentosComprador] = useState<DocumentoEntrada[]>([])
+
   // Veículo de entrada
   const [temEntrada, setTemEntrada] = useState<boolean | null>(null)
   const [entradasVeiculo, setEntradasVeiculo] = useState<EntradaItem[]>([novaEntradaItem()])
@@ -502,8 +509,9 @@ export default function NovaVenda() {
       listarAnexos(vendaId),
       buscarEntradasVeiculo(vendaId),
       listarDocumentosEntrada(vendaId),
+      listarDocumentosComprador(vendaId),
     ])
-      .then(([venda, fotosExistentes, entradasExistentes, docsExistentes]) => {
+      .then(([venda, fotosExistentes, entradasExistentes, docsExistentes, docsCompradorExistentes]) => {
         // Preenche os campos do form
         reset({
           marca:                  venda.marca,
@@ -546,6 +554,9 @@ export default function NovaVenda() {
           setLinhas(jsonParaLinhas(venda.formas_pagamento_json as MetodoPag[]))
         }
 
+        // Troco
+        setTroco((venda as unknown as { troco: number | null }).troco ?? 0)
+
         // Transferência e IPVA
         const transf = parseTransferencia(venda.transferencia_info)
         setTipoTransferencia(transf.tipo)
@@ -556,8 +567,12 @@ export default function NovaVenda() {
         fotosNoBancoIds.current = new Set(fotosExistentes.map((f) => f.id))
         setFotos(fotosExistentes)
 
-        // Documentos de entrada — rastreia IDs já no banco (todos os veículos)
-        docsNoBancoIds.current = new Set(docsExistentes.map((d) => d.id))
+        // Documentos (entrada + comprador) — rastreia IDs já no banco
+        docsNoBancoIds.current = new Set([
+          ...docsExistentes.map((d) => d.id),
+          ...docsCompradorExistentes.map((d) => d.id),
+        ])
+        setDocumentosComprador(docsCompradorExistentes)
 
         // Veículos de entrada
         if (entradasExistentes.length > 0) {
@@ -709,10 +724,13 @@ export default function NovaVenda() {
     const totalDebitos      = temEntrada ? entradasVeiculo.reduce((acc, e) => acc + e.debitos.reduce((a, d) => a + (parseFloat(d.valor) || 0), 0), 0) : 0
     const totalComEntrada   = totalPagamento + valorEntradaBruto - totalDebitos
 
-    if (Math.abs(totalComEntrada - dados.valor_venda) > 0.01) {
+    const valorEfetivoEnviar = totalComEntrada - troco
+    if (Math.abs(valorEfetivoEnviar - dados.valor_venda) > 0.01) {
       const detalhe = valorEntradaBruto > 0
-        ? `pagamentos (${formatarMoeda(totalPagamento)}) + entrada líquida (${formatarMoeda(valorEntradaBruto - totalDebitos)}) = ${formatarMoeda(totalComEntrada)}`
-        : `soma dos pagamentos (${formatarMoeda(totalPagamento)})`
+        ? `pagamentos (${formatarMoeda(totalPagamento)}) + entrada líquida (${formatarMoeda(valorEntradaBruto - totalDebitos)})${troco > 0 ? ` − troco (${formatarMoeda(troco)})` : ''} = ${formatarMoeda(valorEfetivoEnviar)}`
+        : troco > 0
+          ? `pagamentos (${formatarMoeda(totalPagamento)}) − troco (${formatarMoeda(troco)}) = ${formatarMoeda(valorEfetivoEnviar)}`
+          : `soma dos pagamentos (${formatarMoeda(totalPagamento)})`
       setErroMetodos(`${detalhe} não corresponde ao valor da venda (${formatarMoeda(dados.valor_venda)}).`)
       document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
       return
@@ -805,6 +823,7 @@ export default function NovaVenda() {
         observacoes:              dados.observacoes || undefined,
         transferencia_info:       transferenciaInfo,
         ipva_info:                ipvaInfo || undefined,
+        troco:                    troco || 0,
         data_prevista_entrega:    dados.data_prevista_entrega || undefined,
       }
 
@@ -837,6 +856,10 @@ export default function NovaVenda() {
         if (todosDocsNovos.length) await salvarDocumentosNoBanco(todosDocsNovos)
       }
 
+      // Documentos do comprador (CNH/RG) — salva apenas os novos
+      const docsCompradorNovos = documentosComprador.filter((d) => !docsNoBancoIds.current.has(d.id))
+      if (docsCompradorNovos.length) await salvarDocumentosNoBanco(docsCompradorNovos)
+
       await carregar(usuario.id)
       navigate(-1)
     } catch {
@@ -852,8 +875,9 @@ export default function NovaVenda() {
   const totalDebitosEntrada = temEntrada ? entradasVeiculo.reduce((acc, e) => acc + e.debitos.reduce((a, d) => a + (parseFloat(d.valor) || 0), 0), 0) : 0
   const valorEntradaLiquida = valorEntradaCalc - totalDebitosEntrada
   const totalComEntrada     = totalPagamento + valorEntradaLiquida
+  const valorEfetivo        = totalComEntrada - troco
   const valorVenda          = Number(watch('valor_venda')) || 0
-  const confere = valorVenda > 0 && Math.abs(totalComEntrada - valorVenda) <= 0.01
+  const confere = valorVenda > 0 && Math.abs(valorEfetivo - valorVenda) <= 0.01
   const diverge = valorVenda > 0 && totalComEntrada > 0 && !confere
 
   if (carregandoEdicao) {
@@ -1072,6 +1096,15 @@ export default function NovaVenda() {
               </SelectContent>
             </Select>
           </Campo>
+          <div className="col-span-full border-t border-gray-100 pt-4 mt-1">
+            <UploadDocumento
+              saleId={saleId}
+              tipo="cnh_rg_comprador"
+              label="CNH ou RG do Comprador (opcional)"
+              documentos={documentosComprador}
+              onChange={setDocumentosComprador}
+            />
+          </div>
         </Secao>
 
         {/* ── Dados da Negociação ── */}
@@ -1101,6 +1134,18 @@ export default function NovaVenda() {
             <Plus size={15} />
             Adicionar forma de pagamento
           </button>
+
+          {/* Troco ao cliente */}
+          <div className="mt-4 flex flex-wrap items-center gap-3">
+            <Label className="text-xs font-medium text-gray-700 whitespace-nowrap">Troco ao Cliente (R$)</Label>
+            <div className="w-44">
+              <InputMoeda
+                value={troco > 0 ? String(troco) : ''}
+                onChange={(v) => setTroco(v ? parseFloat(v) : 0)}
+              />
+            </div>
+            <p className="text-xs text-gray-400">Valor devolvido ao cliente (excesso de pagamento)</p>
+          </div>
 
           {/* Calculadora */}
           {(linhas.length > 0 || valorEntradaCalc > 0) && (
@@ -1140,14 +1185,20 @@ export default function NovaVenda() {
                   )}
                 </>
               )}
+              {troco > 0 && (
+                <div className="flex justify-between items-center text-purple-600 text-xs mb-1">
+                  <span>− Troco ao cliente:</span>
+                  <span>− {formatarMoeda(troco)}</span>
+                </div>
+              )}
               <div className={`flex justify-between items-center pt-1.5 border-t mt-1 ${
                 confere ? 'border-green-200' : diverge ? 'border-red-200' : 'border-gray-200'
               }`}>
-                <span className="text-gray-600 font-medium">Total:</span>
+                <span className="text-gray-600 font-medium">{troco > 0 ? 'Valor efetivo:' : 'Total:'}</span>
                 <span className={`font-semibold ${
                   confere ? 'text-green-700' : diverge ? 'text-red-700' : 'text-gray-700'
                 }`}>
-                  {formatarMoeda(totalComEntrada)}
+                  {formatarMoeda(valorEfetivo)}
                 </span>
               </div>
               <div className="flex justify-between items-center mt-1">
@@ -1157,7 +1208,7 @@ export default function NovaVenda() {
               {confere && <p className="text-green-700 font-medium mt-2 text-xs">✓ Valores conferem</p>}
               {diverge && (
                 <p className="text-red-700 font-medium mt-2 text-xs">
-                  ✗ Diferença de {formatarMoeda(Math.abs(totalComEntrada - valorVenda))}
+                  ✗ Diferença de {formatarMoeda(Math.abs(valorEfetivo - valorVenda))}
                 </p>
               )}
             </div>

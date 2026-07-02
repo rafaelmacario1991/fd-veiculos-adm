@@ -44,6 +44,7 @@ export interface VendaListagem {
   observacoes: string | null
   transferencia_info: string | null
   ipva_info: string | null
+  troco: number | null
   // Datas da negociação
   data_venda: string | null
   data_prevista_entrega: string | null
@@ -92,6 +93,7 @@ export interface DadosNovaVenda {
   observacoes?: string
   transferencia_info?: string
   ipva_info?: string
+  troco?: number
   data_venda?: string
   data_prevista_entrega?: string
 }
