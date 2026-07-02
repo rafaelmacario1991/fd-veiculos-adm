@@ -319,12 +319,40 @@ notifications_log (id uuid PK, sale_id uuid FK, evento text, destinatario_id uui
 
 - **`seller_pendencies` tem 2 FKs para `users`** (`vendedor_id_fkey` e `aprovado_por_fkey`) — sempre usar FK explícito: `users!seller_pendencies_vendedor_id_fkey(nome)`. Sem o hint o Supabase retorna erro silencioso e lista vazia.
 - **`gen_salt`/`crypt`** em funções SQL: usar `SET search_path = public, extensions` e `extensions.crypt()` / `extensions.gen_salt()`.
-- **Fotos no modo edição:** `salvarFotosNoBanco` faz INSERT. Rastrear IDs existentes com `useRef<Set<string>>` e filtrar antes de salvar. Mesmo padrão para documentos de entrada.
+- **Fotos no modo edição:** `salvarFotosNoBanco` faz INSERT. Rastrear IDs existentes com `useRef<Set<string>>` e filtrar antes de salvar. Mesmo padrão para documentos de entrada (`docsNoBancoIds`) e comprovantes.
 - **`listarTodasVendas`:** usa `users!vendedor_id(nome)` para evitar ambiguidade no join.
 - **Deploy SSH — passo 2 trava:** o `ssh rm -rf /tmp/fdveiculos_upload` às vezes pende indefinidamente. O script foi corrigido (2026-07-02) com `Start-Job + Wait-Job -Timeout 10` — agora ignora e continua automaticamente. Se ainda assim o deploy resultar em **500 Internal Server Error**, significa que `/var/www/fdveiculos` foi apagado mas o `mv` não completou — basta rodar o script de novo.
 - **Não tentar SCP/tar via ferramenta Claude:** transferências longas travam no ambiente de ferramentas. Pedir sempre ao usuário rodar `.\deploy\deploy-fdveiculos.ps1` no próprio terminal.
 - **Enum `status_venda`:** tem 4 valores — `iniciada`, `pendencia_vendedor`, `concluida`, `cancelada`. Migration 026 adicionou `cancelada`. Toda query `.neq('status', 'cancelada')` falhava silenciosamente antes disso.
 - **Pendências de transferência:** salvas em `pendencies` com `setor = 'transferencia'` (mesmo padrão do Financeiro). Funções em `src/services/transferencias.ts`: `registrarPendenciaTransferencia`, `listarPendenciasTransferencia`, `encerrarPendenciaTransferencia`.
+- **Novos campos na query `buscarDadosQuadro`:** ao adicionar um campo novo em `VendaAnalytics`, lembrar de incluí-lo também no `.select()` da query em `src/services/analytics.ts`. Sem isso o campo chega `null`/`undefined` silenciosamente (ex: `canal_venda` estava faltando).
+- **CPF/CNPJ formatado no Zod:** o campo `comprador_cpf_cnpj` usa máscara automática — validar dígitos extraídos (`replace(/\D/g, '')`), não o comprimento da string formatada. CPF = 11 dígitos (14 chars com máscara), CNPJ = 14 dígitos (18 chars com máscara).
+- **Painel Contratos — sub-tarefas:** usar `atualizarDadosAtividade()` (não `concluirAtividade`) para marcar chips parciais. Só chamar `concluirAtividade` quando TODAS as sub-tarefas estiverem concluídas.
+- **Painel Fiscal — backward compat:** atividades antigas têm `dados_json = { numero_nfe, data_emissao }` (flat). Novas têm `{ nfe: { numero_nfe, data_emissao }, livro_detran: {...}, livro_rfb: {...} }`. A função `dadosNfe()` lê os dois formatos.
+- **Comissões — mês de competência:** campo `mes_competencia TEXT` (formato `YYYY-MM`, DEFAULT = mês atual de Recife). `listarComissoes(vendedorId, mes)` filtra por mês — não chamar sem o segundo argumento ou virá tudo.
+
+---
+
+## Migrations aplicadas (resumo)
+
+| Migration | O que faz |
+|-----------|-----------|
+| 001–027 | Ver CLAUDE.md anterior ou memory/project_fdveiculos.md |
+| 028 | migrar_vendas_fd_motos — migração de dados para unidade fd_motos |
+| 029 | mes_competencia_comissoes — `mes_competencia TEXT NOT NULL` em `comissoes`; DEFAULT = mês atual (America/Recife); índice `idx_comissoes_vendedor_mes` |
+
+---
+
+## Features adicionadas em 2026-07 (segunda sessão)
+
+- **Máscara CPF/CNPJ automática** em `NovaVenda.tsx`: função `formatarCpfCnpj()` formata ao digitar; `setValue()` do RHF atualiza o campo; Zod valida dígitos (11 ou 14). Aplicado também em CPF do Proprietário (entrada).
+- **Comprovantes de PIX/Cartão**: upload obrigatório se houver linha PIX/Cartão na negociação. Tipos: `comprovante_pix` / `comprovante_cartao` no bucket `documentos-entrada`. Visíveis no `ModalResumoVenda` como links clicáveis. Função `listarComprovantes(saleId)` em `entradaVeiculo.ts`.
+- **Painel Contratos — 2 sub-tarefas**: Contrato Impresso + Contrato Assinado (chips toggleáveis via `atualizarDadosAtividade`). Botão Concluir só libera quando ambos marcados.
+- **Painel Fiscal — 3 sub-tarefas**: NF-e + Livro DETRAN + Livro RFB. Dialog único com `tipoDialog` + dois `useForm` (`formNfe`, `formLivro`). Backward compat para dados_json flat (legado).
+- **Painel Financeiro — checkboxes por item**: `buildItens()` gera um item por método de pagamento + entrada(s) líquida(s) + troco. Totalizador compara soma confirmada vs `valor_venda`. Backward compat para `confirmacoes boolean[]` (legado).
+- **Quadro de Vendas — gráfico pizza Canal de Vendas**: substituiu pizza de Bancos/Financeiras. `porCanal` calculado em `analytics.ts` usando `canal_venda`. Ranking de bancos permanece abaixo.
+- **Supervisor — botão Editar na lista**: aba Lista do QuadroVendas tem lápis azul → `/vendedor/editar-venda/:id`.
+- **Minhas Comissões — mês de competência**: migration 029 + seletor ◀/▶ na tela + campo editável no modal + `listarMesesComEntradas()`.
 
 ---
 
