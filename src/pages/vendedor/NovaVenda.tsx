@@ -686,8 +686,8 @@ export default function NovaVenda() {
     setEntradasVeiculo((prev) => prev.filter((_, i) => i !== idx))
   }
 
-  async function buscarDadosPorPlacaEntrada(idx: number) {
-    const placa = entradasVeiculo[idx]?.dados.placa ?? ''
+  async function buscarDadosPorPlacaEntrada(idx: number, placaParam?: string) {
+    const placa = placaParam ?? entradasVeiculo[idx]?.dados.placa ?? ''
     if (placa.replace(/[^A-Za-z0-9]/g, '').length < 7) {
       atualizarEntrada(idx, { erroBuscaPlaca: 'Informe a placa completa antes de buscar.' })
       return
@@ -1519,7 +1519,7 @@ export default function NovaVenda() {
                               const limpa = upper.replace(/[^A-Z0-9]/g, '')
                               if (limpa.length === 7 && limpa !== entrada.ultimaPlacaBuscada) {
                                 atualizarEntrada(idx, { ultimaPlacaBuscada: limpa })
-                                buscarDadosPorPlacaEntrada(idx)
+                                buscarDadosPorPlacaEntrada(idx, limpa)
                               }
                             }}
                           />
