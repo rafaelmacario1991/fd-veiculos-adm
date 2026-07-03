@@ -311,7 +311,9 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
 
   const inputData = (
     <div>
-      <label className="block text-xs font-medium text-gray-600 mb-1">Data do pagamento</label>
+      <label className="block text-xs font-medium text-gray-600 mb-1">
+        Data do pagamento{extraFinanciamento && <span className="text-red-500"> *</span>}
+      </label>
       <Input type="date" className="h-9 text-sm" value={linha.data} onChange={(e) => onChange({ data: e.target.value })} />
     </div>
   )
@@ -769,6 +771,11 @@ export default function NovaVenda() {
 
     // Validação — campos obrigatórios do financiamento
     for (const l of linhas.filter((l) => l.tipo === 'financiamento')) {
+      if (!l.data) {
+        setErroMetodos('Informe a Data do Pagamento no financiamento.')
+        document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
       if (!l.banco) {
         setErroMetodos('Selecione o Banco / Financeira no financiamento.')
         document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
