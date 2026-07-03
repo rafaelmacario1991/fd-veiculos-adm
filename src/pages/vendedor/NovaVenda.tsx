@@ -353,7 +353,7 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
       {extraFinanciamento && (
         <div className="border-t border-gray-100 px-3 pb-3 pt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
           <div className="sm:col-span-3">
-            <label className="block text-xs font-medium text-gray-600 mb-1">Banco / Financeira</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Banco / Financeira <span className="text-red-500">*</span></label>
             <Select
               value={linha.banco}
               onValueChange={(v) => onChange({ banco: v ?? '' })}
@@ -369,7 +369,7 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
             </Select>
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Nº de Parcelas <span className="text-red-500">*</span></label>
             <Input
               type="number"
               min={1}
@@ -380,7 +380,7 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Valor da Parcela (R$)</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Valor da Parcela (R$) <span className="text-red-500">*</span></label>
             <InputMoeda
               value={linha.valorParcela}
               onChange={(v) => onChange({ valorParcela: v })}
@@ -388,7 +388,7 @@ function ItemPagamento({ linha, temFinanciamento, podRemover, onChange, onRemove
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-1">Data 1ª Parcela</label>
+            <label className="block text-xs font-medium text-gray-600 mb-1">Data 1ª Parcela <span className="text-red-500">*</span></label>
             <Input
               type="date"
               className="h-9 text-sm"
@@ -766,6 +766,30 @@ export default function NovaVenda() {
       return
     }
     setErroMetodos(null)
+
+    // Validação — campos obrigatórios do financiamento
+    for (const l of linhas.filter((l) => l.tipo === 'financiamento')) {
+      if (!l.banco) {
+        setErroMetodos('Selecione o Banco / Financeira no financiamento.')
+        document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+      if (!l.parcelas || Number(l.parcelas) < 1) {
+        setErroMetodos('Informe o Nº de Parcelas no financiamento.')
+        document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+      if (!l.valorParcela || parseFloat(l.valorParcela.replace(',', '.')) <= 0) {
+        setErroMetodos('Informe o Valor da Parcela no financiamento.')
+        document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+      if (!l.dataPrimeiroPagamento) {
+        setErroMetodos('Informe a Data da 1ª Parcela no financiamento.')
+        document.getElementById('secao-pagamento')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        return
+      }
+    }
 
     // Validação — CNH/RG do comprador obrigatório
     if (documentosComprador.length === 0) {
