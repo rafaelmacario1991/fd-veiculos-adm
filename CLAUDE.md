@@ -330,6 +330,8 @@ notifications_log (id uuid PK, sale_id uuid FK, evento text, destinatario_id uui
 - **Painel Contratos — sub-tarefas:** usar `atualizarDadosAtividade()` (não `concluirAtividade`) para marcar chips parciais. Só chamar `concluirAtividade` quando TODAS as sub-tarefas estiverem concluídas.
 - **Painel Fiscal — backward compat:** atividades antigas têm `dados_json = { numero_nfe, data_emissao }` (flat). Novas têm `{ nfe: { numero_nfe, data_emissao }, livro_detran: {...}, livro_rfb: {...} }`. A função `dadosNfe()` lê os dois formatos.
 - **Comissões — mês de competência:** campo `mes_competencia TEXT` (formato `YYYY-MM`, DEFAULT = mês atual de Recife). `listarComissoes(vendedorId, mes)` filtra por mês — não chamar sem o segundo argumento ou virá tudo.
+- **Busca de placa automática — timing de estado React:** `buscarDadosPorPlacaEntrada(idx)` não pode ler `entradasVeiculo[idx].dados.placa` do estado no mesmo ciclo que `atualizarDadosEntrada` foi chamado — o estado ainda está desatualizado. Sempre passar a placa como parâmetro direto: `buscarDadosPorPlacaEntrada(idx, limpa)`.
+- **Validação de financiamento em `enviar()`:** campos Data do Pagamento, Banco/Financeira, Nº Parcelas, Valor Parcela e Data 1ª Parcela são validados manualmente iterando `linhas.filter(l => l.tipo === 'financiamento')` — não entram no schema Zod.
 
 ---
 
@@ -353,6 +355,8 @@ notifications_log (id uuid PK, sale_id uuid FK, evento text, destinatario_id uui
 - **Quadro de Vendas — gráfico pizza Canal de Vendas**: substituiu pizza de Bancos/Financeiras. `porCanal` calculado em `analytics.ts` usando `canal_venda`. Ranking de bancos permanece abaixo.
 - **Supervisor — botão Editar na lista**: aba Lista do QuadroVendas tem lápis azul → `/vendedor/editar-venda/:id`.
 - **Minhas Comissões — mês de competência**: migration 029 + seletor ◀/▶ na tela + campo editável no modal + `listarMesesComEntradas()`.
+- **Financiamento — campos obrigatórios** (2026-07-03): Data do Pagamento, Banco/Financeira, Nº Parcelas, Valor Parcela e Data 1ª Parcela. Labels marcados com `*`. Validação em `enviar()`.
+- **Busca de placa automática** (2026-07-03): ao digitar 7º caractere dispara `consultarPlaca()` automaticamente, campo bloqueado durante busca, erro desbloqueia para edição manual. Ref `ultimaPlacaBuscada` evita duplicatas. `buscarDadosPorPlacaEntrada(idx, placaParam?)` aceita placa como parâmetro para evitar leitura de estado desatualizado.
 
 ---
 
