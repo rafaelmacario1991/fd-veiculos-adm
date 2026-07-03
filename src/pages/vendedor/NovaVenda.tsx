@@ -35,7 +35,7 @@ import {
   type DocumentoEntrada,
   type DebitoEntrada,
 } from '@/services/entradaVeiculo'
-import { Camera, Car, AlertCircle, Plus, X, Loader2, Search, Building2 } from 'lucide-react'
+import { Camera, Car, AlertCircle, Plus, X, Loader2, Building2 } from 'lucide-react'
 import { consultarPlaca } from '@/services/placaApi'
 import type { Unidade } from '@/types'
 
@@ -53,6 +53,7 @@ interface EntradaItem {
   erroDoc: string | null
   buscandoPlaca: boolean
   erroBuscaPlaca: string | null
+  ultimaPlacaBuscada: string
 }
 
 function novaEntradaItem(): EntradaItem {
@@ -65,6 +66,7 @@ function novaEntradaItem(): EntradaItem {
     erroDoc: null,
     buscandoPlaca: false,
     erroBuscaPlaca: null,
+    ultimaPlacaBuscada: '',
   }
 }
 
@@ -489,6 +491,7 @@ export default function NovaVenda() {
   // Placa — busca automática (veículo principal)
   const [buscandoPlaca, setBuscandoPlaca] = useState(false)
   const [erroBuscaPlaca, setErroBuscaPlaca] = useState<string | null>(null)
+  const ultimaPlacaBuscada = useRef<string>('')
 
   // CEP
   const [buscandoCep, setBuscandoCep] = useState(false)
@@ -626,6 +629,7 @@ export default function NovaVenda() {
               erroDoc: null,
               buscandoPlaca: false,
               erroBuscaPlaca: null,
+              ultimaPlacaBuscada: '',
             }
           })
           setEntradasVeiculo(items)
@@ -1034,31 +1038,33 @@ export default function NovaVenda() {
         {/* Dados do Veículo */}
         <Secao titulo="Dados do Veículo">
           <Campo label="Placa *" erro={errors.placa?.message}>
-            <div className="flex gap-2">
+            <div className="relative">
               <Input
                 {...register('placa')}
                 placeholder="ABC1234"
-                className="uppercase flex-1"
+                className="uppercase pr-8"
+                disabled={buscandoPlaca}
                 onChange={(e) => {
-                  e.target.value = e.target.value.toUpperCase()
+                  const upper = e.target.value.toUpperCase()
+                  e.target.value = upper
                   register('placa').onChange(e)
                   setErroBuscaPlaca(null)
+                  const limpa = upper.replace(/[^A-Z0-9]/g, '')
+                  if (limpa.length === 7 && limpa !== ultimaPlacaBuscada.current) {
+                    ultimaPlacaBuscada.current = limpa
+                    buscarDadosPorPlaca()
+                  }
                 }}
               />
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={buscarDadosPorPlaca}
-                disabled={buscandoPlaca}
-                className="flex-shrink-0 gap-1.5 px-3"
-              >
-                {buscandoPlaca
-                  ? <Loader2 size={14} className="animate-spin" />
-                  : <Search size={14} />}
-                {buscandoPlaca ? 'Buscando…' : 'Buscar'}
-              </Button>
+              {buscandoPlaca && (
+                <Loader2 size={14} className="animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 text-blue-500" />
+              )}
             </div>
+            {buscandoPlaca && (
+              <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                <Loader2 size={11} className="animate-spin" /> Consultando placa…
+              </p>
+            )}
             {erroBuscaPlaca && (
               <p className="flex items-center gap-1 text-xs text-amber-600 mt-1">
                 <AlertCircle size={12} />{erroBuscaPlaca}
@@ -1500,28 +1506,32 @@ export default function NovaVenda() {
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                       <div>
                         <Label className="text-xs font-medium text-gray-700 mb-1 block">Placa *</Label>
-                        <div className="flex gap-2">
+                        <div className="relative">
                           <Input
                             placeholder="ABC1234"
-                            className="uppercase flex-1"
+                            className="uppercase pr-8"
+                            disabled={entrada.buscandoPlaca}
                             value={entrada.dados.placa ?? ''}
                             onChange={(e) => {
-                              atualizarDadosEntrada(idx, { placa: e.target.value.toUpperCase() })
+                              const upper = e.target.value.toUpperCase()
+                              atualizarDadosEntrada(idx, { placa: upper })
                               atualizarEntrada(idx, { erroBuscaPlaca: null })
+                              const limpa = upper.replace(/[^A-Z0-9]/g, '')
+                              if (limpa.length === 7 && limpa !== entrada.ultimaPlacaBuscada) {
+                                atualizarEntrada(idx, { ultimaPlacaBuscada: limpa })
+                                buscarDadosPorPlacaEntrada(idx)
+                              }
                             }}
                           />
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() => buscarDadosPorPlacaEntrada(idx)}
-                            disabled={entrada.buscandoPlaca}
-                            className="flex-shrink-0 gap-1.5 px-3"
-                          >
-                            {entrada.buscandoPlaca ? <Loader2 size={14} className="animate-spin" /> : <Search size={14} />}
-                            {entrada.buscandoPlaca ? 'Buscando…' : 'Buscar'}
-                          </Button>
+                          {entrada.buscandoPlaca && (
+                            <Loader2 size={14} className="animate-spin absolute right-2.5 top-1/2 -translate-y-1/2 text-blue-500" />
+                          )}
                         </div>
+                        {entrada.buscandoPlaca && (
+                          <p className="text-xs text-blue-600 mt-1 flex items-center gap-1">
+                            <Loader2 size={11} className="animate-spin" /> Consultando placa…
+                          </p>
+                        )}
                         {entrada.erros.placa && <p className="text-xs text-red-600 mt-1">{entrada.erros.placa}</p>}
                         {entrada.erroBuscaPlaca && (
                           <p className="flex items-center gap-1 text-xs text-amber-600 mt-1">
