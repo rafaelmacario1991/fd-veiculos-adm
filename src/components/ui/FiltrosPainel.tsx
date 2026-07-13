@@ -5,6 +5,7 @@ export interface FiltrosPainelState {
   de: string
   ate: string
   status: string
+  unidade?: string
 }
 
 interface OpcaoStatus {
@@ -17,7 +18,14 @@ interface Props {
   onChange: (f: FiltrosPainelState) => void
   opcoesStatus?: OpcaoStatus[]
   totalExibido?: number
+  mostrarFiltroUnidade?: boolean
 }
+
+const UNIDADES = [
+  { valor: '', label: 'Todos' },
+  { valor: 'fd_veiculos', label: 'FD Veículos' },
+  { valor: 'fd_motos', label: 'FD Motos' },
+]
 
 const hoje = () => format(new Date(), 'yyyy-MM-dd')
 
@@ -49,7 +57,7 @@ export const STATUS_TRANSFERENCIA: OpcaoStatus[] = [
   { valor: 'concluido', label: 'Concluído' },
 ]
 
-export default function FiltrosPainel({ filtros, onChange, opcoesStatus, totalExibido }: Props) {
+export default function FiltrosPainel({ filtros, onChange, opcoesStatus, totalExibido, mostrarFiltroUnidade }: Props) {
   const periodoAtivo = periodos.find((p) => {
     const r = p.fn()
     return r.de === filtros.de && r.ate === filtros.ate
@@ -133,6 +141,28 @@ export default function FiltrosPainel({ filtros, onChange, opcoesStatus, totalEx
         <span className="text-xs text-gray-400 md:ml-auto">
           {totalExibido} resultado{totalExibido !== 1 ? 's' : ''}
         </span>
+      )}
+
+      {/* Filtro de unidade */}
+      {mostrarFiltroUnidade && (
+        <div className="flex items-center gap-1 flex-wrap">
+          <div className="hidden md:block w-px h-5 bg-gray-200 mr-1" />
+          <span className="text-xs text-gray-400 mr-0.5">Unidade:</span>
+          {UNIDADES.map((u) => (
+            <button
+              key={u.valor}
+              type="button"
+              onClick={() => set({ unidade: u.valor })}
+              className={`px-2.5 py-1 rounded-md text-xs font-medium transition-colors ${
+                (filtros.unidade ?? '') === u.valor
+                  ? 'bg-[#DC2626] text-white'
+                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+              }`}
+            >
+              {u.label}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   )

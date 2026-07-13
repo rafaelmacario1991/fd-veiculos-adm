@@ -18,6 +18,7 @@ export interface FiltrosSetor {
   de?: string
   ate?: string
   status?: string
+  unidade?: string
 }
 
 export async function listarAtividadesDoSetor(
@@ -30,9 +31,10 @@ export async function listarAtividadesDoSetor(
     .eq('setor', setor)
     .order('criado_em', { ascending: false })
 
-  if (filtros.status) query = query.eq('status', filtros.status)
-  if (filtros.de)     query = query.gte('criado_em', filtros.de)
-  if (filtros.ate)    query = query.lte('criado_em', filtros.ate + 'T23:59:59')
+  if (filtros.status)  query = query.eq('status', filtros.status)
+  if (filtros.de)      query = query.gte('criado_em', filtros.de)
+  if (filtros.ate)     query = query.lte('criado_em', filtros.ate + 'T23:59:59')
+  if (filtros.unidade) query = query.eq('sales.unidade', filtros.unidade)
 
   const { data, error } = await query
   if (error) throw error

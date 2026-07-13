@@ -53,7 +53,7 @@ export default function PainelTransferencia() {
   const [salvandoPendencia, setSalvandoPendencia] = useState(false)
 
   const navigate = useNavigate()
-  const [filtros, setFiltros] = useState<FiltrosPainelState>({ de: '', ate: '', status: '' })
+  const [filtros, setFiltros] = useState<FiltrosPainelState>({ de: '', ate: '', status: '', unidade: '' })
 
   // Modal resumo de venda
   const [vendaSelecionada, setVendaSelecionada] = useState<VendaListagem | null>(null)
@@ -66,9 +66,10 @@ export default function PainelTransferencia() {
   async function carregar() {
     setCarregando(true)
     try {
+      const filtrosComum = { de: filtros.de, ate: filtros.ate, unidade: filtros.unidade }
       const [pend, proc, desp] = await Promise.all([
-        listarAtividadesDoSetor('transferencia'),
-        listarTransferencias(filtros),
+        listarAtividadesDoSetor('transferencia', filtrosComum),
+        listarTransferencias({ ...filtrosComum, status: filtros.status }),
         listarDespachantes(),
       ])
       setPendentes(pend)
@@ -181,7 +182,8 @@ export default function PainelTransferencia() {
           filtros={filtros}
           onChange={setFiltros}
           opcoesStatus={STATUS_TRANSFERENCIA}
-          totalExibido={processos.length + aguardandoEnvio.length}
+          mostrarFiltroUnidade
+          totalExibido={processos.length + (filtros.status ? 0 : aguardandoEnvio.length)}
         />
 
         {carregando && <p className="text-gray-400 text-sm">Carregando...</p>}
@@ -189,7 +191,7 @@ export default function PainelTransferencia() {
         {!carregando && (
           <>
             {/* Aguardando envio ao despachante */}
-            {aguardandoEnvio.length > 0 && (
+            {aguardandoEnvio.length > 0 && !filtros.status && (
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
                   Aguardando Envio ao Despachante ({aguardandoEnvio.length})
@@ -380,7 +382,7 @@ export default function PainelTransferencia() {
               </div>
             )}
 
-            {aguardandoEnvio.length === 0 && processosAtivos.length === 0 && processosConcluidos.length === 0 && (
+            {(filtros.status || aguardandoEnvio.length === 0) && processosAtivos.length === 0 && processosConcluidos.length === 0 && (
               <div className="flex flex-col items-center justify-center h-48 text-center">
                 <Truck size={40} className="text-gray-300 mb-3" />
                 <p className="text-gray-500 font-medium">Nenhum processo ativo</p>

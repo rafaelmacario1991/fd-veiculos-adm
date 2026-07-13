@@ -21,17 +21,19 @@ export interface FiltrosTransferencia {
   de?: string
   ate?: string
   status?: string
+  unidade?: string
 }
 
 export async function listarTransferencias(filtros: FiltrosTransferencia = {}): Promise<ProcessoComDespachante[]> {
   let query = supabase
     .from('transfer_processes')
-    .select('*, dispatchers(*), sales(marca, modelo, placa, comprador_nome, valor_venda)')
+    .select('*, dispatchers(*), sales(marca, modelo, placa, comprador_nome, valor_venda, unidade)')
     .order('criado_em', { ascending: false })
 
-  if (filtros.status) query = query.eq('status', filtros.status)
-  if (filtros.de)     query = query.gte('criado_em', filtros.de)
-  if (filtros.ate)    query = query.lte('criado_em', filtros.ate + 'T23:59:59')
+  if (filtros.status)  query = query.eq('status', filtros.status)
+  if (filtros.de)      query = query.gte('criado_em', filtros.de)
+  if (filtros.ate)     query = query.lte('criado_em', filtros.ate + 'T23:59:59')
+  if (filtros.unidade) query = query.eq('sales.unidade', filtros.unidade)
 
   const { data, error } = await query
   if (error) throw error
