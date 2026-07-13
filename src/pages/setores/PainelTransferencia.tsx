@@ -176,8 +176,18 @@ export default function PainelTransferencia() {
     ? processos.filter((p) => (p as unknown as { sales: { unidade: string } }).sales?.unidade === unidade)
     : processos
 
-  const saleIdsComProcesso = new Set(processosFiltrados.map((p) => p.sale_id))
-  const aguardandoEnvio = pendentesFiltrados.filter((a) => !saleIdsComProcesso.has(a.sale_id))
+  // Todas as atividades sem processo criado ainda
+  const saleIdsComProcessoTotal = new Set(processos.map((p) => p.sale_id))
+  const aguardandoEnvioTotal = pendentesFiltrados.filter((a) => !saleIdsComProcessoTotal.has(a.sale_id))
+
+  // Decide o que mostrar em "Aguardando Envio" conforme o filtro de status
+  const aguardandoExibir =
+    filtros.status === 'pendencia'
+      ? aguardandoEnvioTotal.filter((a) => (pendenciasMap.get(a.sale_id) ?? []).length > 0)
+      : filtros.status
+      ? [] // outro filtro de status: ocultar seção
+      : aguardandoEnvioTotal // sem filtro: mostrar todos
+
   const processosAtivos = processosFiltrados.filter((p) => p.status !== 'concluido')
   const processosConcluidos = processosFiltrados.filter((p) => p.status === 'concluido')
 
@@ -191,7 +201,7 @@ export default function PainelTransferencia() {
           onChange={setFiltros}
           opcoesStatus={STATUS_TRANSFERENCIA}
           mostrarFiltroUnidade
-          totalExibido={processos.length + (filtros.status ? 0 : aguardandoEnvio.length)}
+          totalExibido={processosFiltrados.length + aguardandoExibir.length}
         />
 
         {carregando && <p className="text-gray-400 text-sm">Carregando...</p>}
@@ -199,13 +209,13 @@ export default function PainelTransferencia() {
         {!carregando && (
           <>
             {/* Aguardando envio ao despachante */}
-            {aguardandoEnvio.length > 0 && !filtros.status && (
+            {aguardandoExibir.length > 0 && (
               <div>
                 <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                  Aguardando Envio ao Despachante ({aguardandoEnvio.length})
+                  Aguardando Envio ao Despachante ({aguardandoExibir.length})
                 </p>
                 <div className="space-y-3">
-                  {aguardandoEnvio.map((a) => {
+                  {aguardandoExibir.map((a) => {
                     const pendenciasCard = pendenciasMap.get(a.sale_id) ?? []
                     return (
                       <CartaoSetor key={a.id} atividade={a}
@@ -390,7 +400,7 @@ export default function PainelTransferencia() {
               </div>
             )}
 
-            {(filtros.status || aguardandoEnvio.length === 0) && processosAtivos.length === 0 && processosConcluidos.length === 0 && (
+            {aguardandoExibir.length === 0 && processosAtivos.length === 0 && processosConcluidos.length === 0 && (
               <div className="flex flex-col items-center justify-center h-48 text-center">
                 <Truck size={40} className="text-gray-300 mb-3" />
                 <p className="text-gray-500 font-medium">Nenhum processo ativo</p>
