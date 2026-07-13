@@ -66,7 +66,7 @@ export default function PainelTransferencia() {
   async function carregar() {
     setCarregando(true)
     try {
-      const filtrosComum = { de: filtros.de, ate: filtros.ate, unidade: filtros.unidade }
+      const filtrosComum = { de: filtros.de, ate: filtros.ate }
       const [pend, proc, desp] = await Promise.all([
         listarAtividadesDoSetor('transferencia', filtrosComum),
         listarTransferencias({ ...filtrosComum, status: filtros.status }),
@@ -167,11 +167,19 @@ export default function PainelTransferencia() {
     } catch { /* silent */ }
   }
 
-  // Filtra vendas que já têm processo criado (aguarda apenas as sem processo)
-  const saleIdsComProcesso = new Set(processos.map((p) => p.sale_id))
-  const aguardandoEnvio = pendentes.filter((a) => !saleIdsComProcesso.has(a.sale_id))
-  const processosAtivos = processos.filter((p) => p.status !== 'concluido')
-  const processosConcluidos = processos.filter((p) => p.status === 'concluido')
+  // Filtra por unidade client-side
+  const unidade = filtros.unidade ?? ''
+  const pendentesFiltrados = unidade
+    ? pendentes.filter((a) => a.sales.unidade === unidade)
+    : pendentes
+  const processosFiltrados = unidade
+    ? processos.filter((p) => (p as unknown as { sales: { unidade: string } }).sales?.unidade === unidade)
+    : processos
+
+  const saleIdsComProcesso = new Set(processosFiltrados.map((p) => p.sale_id))
+  const aguardandoEnvio = pendentesFiltrados.filter((a) => !saleIdsComProcesso.has(a.sale_id))
+  const processosAtivos = processosFiltrados.filter((p) => p.status !== 'concluido')
+  const processosConcluidos = processosFiltrados.filter((p) => p.status === 'concluido')
 
   return (
     <div className="flex flex-col flex-1">
